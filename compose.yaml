@@ -15,16 +15,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-  api:
+  role-setup:
+    image: postgres:17-alpine
+    environment:
+      PGPASSWORD: local_dev_only
+    volumes:
+      - ./ops/local_roles.sql:/roles.sql:ro
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "-h", "db", "-U", "eventcheckin", "-d", "eventcheckin", "-f", "/roles.sql"]
+    depends_on:
+      db:
+        condition: service_healthy
+  migrate:
+    profiles: ["tools"]
     build: ./backend
     environment:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://eventcheckin:local_dev_only@db:5432/eventcheckin
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      role-setup:
+        condition: service_completed_successfully
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      role-setup:
+        condition: service_completed_successfully
   web:
     build: ./frontend
     environment:
