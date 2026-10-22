@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<!-- saved from url=(0061)file:///C:/Users/USER/Downloads/event-checkin-wireframes.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Check-in Platform — Wireframes</title>
+<style>
+  :root{
+    --bg:#f3f3f1;
+    --panel:#ffffff;
+    --ink:#1a1a1a;
+    --ink-soft:#6b6b6b;
+    --line:#c9c9c6;
+    --line-dash:#b7b7b3;
+    --block:#e9e9e6;
+    --block-2:#dedede;
+    --accent:#2f5fe0;
+    --accent-soft:#e7edfd;
+    --ok:#1f8a4c;
+    --warn:#b8860b;
+    --err:#c23b3b;
+    --nav-bg:#1c1d20;
+    --nav-ink:#d8d8da;
+    --nav-ink-dim:#8b8c90;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg:#141416;
+      --panel:#1c1d20;
+      --ink:#eaeaea;
+      --ink-soft:#9a9a9a;
+      --line:#3a3b3e;
+      --line-dash:#4a4b4e;
+      --block:#26272b;
+      --block-2:#303136;
+      --accent:#6c8cf5;
+      --accent-soft:#232a42;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#141416;
+    --panel:#1c1d20;
+    --ink:#eaeaea;
+    --ink-soft:#9a9a9a;
+    --line:#3a3b3e;
+    --line-dash:#4a4b4e;
+    --block:#26272b;
+    --block-2:#303136;
+    --accent:#6c8cf5;
+    --accent-soft:#232a42;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  body{display:flex;flex-direction:column;min-height:100vh;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 22px;background:var(--panel);border-bottom:1px solid var(--line);
+    flex-wrap:wrap;gap:10px;
+  }
+  .topbar h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px;}
+  .topbar .sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .legend{display:flex;gap:16px;font-size:11px;color:var(--ink-soft);flex-wrap:wrap;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .swatch{width:12px;height:12px;border-radius:3px;display:inline-block;}
+  .swatch.dash{background:transparent;border:1.5px dashed var(--line-dash);}
+  .swatch.solid{background:var(--block-2);}
+  .swatch.accent{background:var(--accent);}
+
+  /* ---------- Layout ---------- */
+  .layout{display:flex;flex:1;min-height:0;}
+  nav.screens{
+    width:220px;flex:0 0 220px;background:var(--nav-bg);color:var(--nav-ink);
+    padding:16px 10px;overflow-y:auto;
+  }
+  nav.screens .group-label{
+    font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--nav-ink-dim);
+    padding:10px 10px 6px;
+  }
+  nav.screens button{
+    display:block;width:100%;text-align:left;background:transparent;border:none;
+    color:var(--nav-ink);padding:9px 10px;border-radius:6px;font-size:13px;cursor:pointer;
+    margin-bottom:2px;font-family:var(--sans);
+  }
+  nav.screens button:hover{background:#2a2b2f;}
+  nav.screens button.active{background:var(--accent);color:#fff;}
+  nav.screens button .n{color:var(--nav-ink-dim);margin-right:8px;font-family:var(--mono);font-size:11px;}
+  nav.screens button.active .n{color:#dbe4ff;}
+
+  main{flex:1;min-width:0;overflow-y:auto;padding:26px;}
+  .canvas-wrap{max-width:1000px;margin:0 auto;}
+  .screen-head{margin-bottom:16px;}
+  .screen-head h2{margin:0 0 4px;font-size:19px;}
+  .screen-head p{margin:0;color:var(--ink-soft);font-size:13px;max-width:640px;}
+
+  .frame{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:0;overflow:hidden;position:relative;
+  }
+  .frame-inner{padding:22px;}
+
+  /* ---------- Wireframe primitives ---------- */
+  .wf-block{background:var(--block);border:1px dashed var(--line-dash);border-radius:4px;}
+  .wf-block.solidline{border-style:solid;}
+  .wf-text-line{height:9px;background:var(--block-2);border-radius:2px;margin:6px 0;}
+  .wf-avatar{width:34px;height:34px;border-radius:50%;background:var(--block-2);flex:0 0 auto;}
+  .wf-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    background:var(--accent);color:#fff;border:none;border-radius:6px;
+    padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);
+  }
+  .wf-btn.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent);}
+  .wf-input{
+    border:1px solid var(--line);background:var(--panel);border-radius:6px;
+    padding:9px 11px;font-size:13px;color:var(--ink-soft);font-family:var(--sans);
+  }
+  .wf-tag{
+    font-size:10.5px;padding:3px 8px;border-radius:20px;background:var(--block-2);color:var(--ink-soft);
+    font-family:var(--mono);
+  }
+  .wf-tag.accent{background:var(--accent-soft);color:var(--accent);}
+  .wf-tag.ok{background:#e5f5ec;color:var(--ok);}
+  .wf-tag.warn{background:#fbf1dc;color:var(--warn);}
+  .wf-tag.err{background:#fbe9e9;color:var(--err);}
+
+  .callout{
+    position:absolute;width:20px;height:20px;border-radius:50%;background:var(--accent);
+    color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);box-shadow:0 0 0 3px var(--panel);cursor:default;
+  }
+
+  .annotations{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;}
+  .annotations h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);}
+  .annotations ol{margin:0;padding-left:0;list-style:none;}
+  .annotations li{display:flex;gap:10px;font-size:13px;margin-bottom:9px;line-height:1.45;}
+  .annotations li .num{
+    flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;
+    font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+  }
+
+  /* ---------- Specific mini components ---------- */
+  .row{display:flex;gap:14px;}
+  .col{flex:1;min-width:0;}
+  table.wf-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.wf-table th{
+    text-align:left;background:var(--block);color:var(--ink-soft);font-weight:600;
+    padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.03em;
+  }
+  table.wf-table td{padding:9px 10px;border-top:1px solid var(--line);}
+  .stat-card{flex:1;border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--panel);}
+  .stat-card .num{font-size:22px;font-weight:700;}
+  .stat-card .lbl{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;margin-top:2px;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .bar-row .lbl{width:70px;font-size:11.5px;color:var(--ink-soft);flex:0 0 auto;}
+  .bar-track{flex:1;height:10px;background:var(--block);border-radius:5px;overflow:hidden;}
+  .bar-fill{height:100%;background:var(--accent);border-radius:5px;}
+  .bar-row .val{width:40px;text-align:right;font-size:11.5px;color:var(--ink-soft);}
+
+  .phone{
+    width:300px;margin:0 auto;border:10px solid #111;border-radius:36px;background:#000;
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  :root[data-theme="dark"] .phone, :root:not([data-theme="light"]) .phone{
+    @media (prefers-color-scheme: dark){ border-color:#000; }
+  }
+  .phone-screen{
+    background:var(--panel);border-radius:26px;overflow:hidden;min-height:560px;position:relative;
+    display:flex;flex-direction:column;
+  }
+  .phone-notch{height:22px;display:flex;align-items:center;justify-content:center;}
+  .phone-notch .pill{width:70px;height:5px;background:#00000030;border-radius:3px;}
+  .scan-viewport{
+    flex:1;background:#0d0d0f;position:relative;display:flex;align-items:center;justify-content:center;
+  }
+  .scan-frame{
+    width:190px;height:190px;border:3px solid #ffffffaa;border-radius:18px;position:relative;
+  }
+  .scan-frame::before,.scan-frame::after{content:"";position:absolute;width:26px;height:26px;border-color:var(--accent);}
+  .scan-corner{position:absolute;width:26px;height:26px;border:4px solid var(--accent);}
+  .tl{top:-4px;left:-4px;border-right:none;border-bottom:none;border-radius:8px 0 0 0;}
+  .tr{top:-4px;right:-4px;border-left:none;border-bottom:none;border-radius:0 8px 0 0;}
+  .bl{bottom:-4px;left:-4px;border-right:none;border-top:none;border-radius:0 0 0 8px;}
+  .br{bottom:-4px;right:-4px;border-left:none;border-top:none;border-radius:0 0 8px 0;}
+  .scan-result{
+    padding:16px 18px;display:flex;flex-direction:column;gap:4px;
+  }
+  .scan-result .headline{font-size:16px;font-weight:700;}
+  .scan-result .sub{font-size:12.5px;color:var(--ink-soft);}
+  .gate-strip{
+    display:flex;align-items:center;justify-content:space-between;padding:10px 16px;
+    background:var(--block);font-size:11.5px;color:var(--ink-soft);
+  }
+  .queue-strip{
+    display:flex;align-items:center;justify-content:space-between;padding:10px 16px;
+    font-size:11px;border-top:1px solid var(--line);color:var(--ink-soft);
+  }
+  .switcher{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;}
+  .switcher button{
+    font-size:11.5px;padding:7px 12px;border-radius:20px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink-soft);cursor:pointer;font-family:var(--sans);
+  }
+  .switcher button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+  footer{
+    text-align:center;font-size:11px;color:var(--ink-soft);padding:14px;border-top:1px solid var(--line);
+    background:var(--panel);
+  }
+
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;}
+
+  @media (max-width:820px){
+    .layout{flex-direction:column;}
+    nav.screens{width:100%;flex:0 0 auto;display:flex;overflow-x:auto;padding:10px;}
+    nav.screens .group-label{display:none;}
+    nav.screens button{white-space:nowrap;margin-right:6px;margin-bottom:0;}
+    .row{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>Event Check-in Platform — Wireframes</h1>
+    <div class="sub">Low-fidelity structural wireframes · v1.0 · For dev &amp; design handoff</div>
+  </div>
+  <div class="legend">
+    <span><span class="swatch accent"></span> interactive / clickable</span>
+    <span><span class="swatch dash"></span> dynamic / data-driven content</span>
+    <span><span class="swatch solid"></span> static placeholder</span>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="screens" id="nav">
+    <div class="group-label">Participant</div>
+    <button data-screen="register" class=""><span class="n">01</span>Registration Page</button>
+    <div class="group-label">Client Admin</div>
+    <button data-screen="dashboard" class="active"><span class="n">02</span>Dashboard — Overview</button>
+    <button data-screen="participants" class=""><span class="n">03</span>Participants Table</button>
+    <button data-screen="messaging" class=""><span class="n">04</span>Messaging</button>
+    <button data-screen="reports" class=""><span class="n">05</span>Reports</button>
+    <div class="group-label">Gate Staff</div>
+    <button data-screen="scanner" class=""><span class="n">06</span>Scanner App (mobile)</button>
+    <div class="group-label">Platform Owner</div>
+    <button data-screen="superadmin" class=""><span class="n">07</span>Super Admin Console</button>
+  </nav>
+
+  <main>
+    <div class="canvas-wrap" id="canvas">
+    <div class="screen-head"><h2>02 · Client Admin Dashboard — Overview</h2><p>Landing screen for event organizers once an event is live. Real-time (sync-aware) check-in visibility.</p></div>
+    
+    <div class="frame"><div class="frame-inner">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <div class="wf-text-line" style="width:180px;height:14px;margin:0;"></div>
+        <div style="display:flex;gap:8px;align-items:center;position:relative;">
+          <span class="wf-tag ok">● Live sync</span>
+          <span class="callout" style="position:relative;top:0;left:0;">1</span>
+        </div>
+      </div>
+
+      <div class="row" style="margin-bottom:20px;">
+        <div class="stat-card"><div class="num">14,208</div><div class="lbl">Registered</div></div>
+        <div class="stat-card"><div class="num">9,742</div><div class="lbl">Checked In</div></div>
+        <div class="stat-card"><div class="num">4,466</div><div class="lbl">Remaining</div></div>
+        <div class="stat-card" style="position:relative;"><div class="num">68%</div><div class="lbl">Attendance rate</div><span class="callout" style="top:-8px;right:-8px;">2</span></div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1.3;">
+          <div class="wf-text-line" style="width:140px;height:11px;"></div>
+          <div class="wf-block solidline" style="padding:10px;margin-top:8px;">
+            <div class="bar-row"><span class="lbl">Gate A</span><div class="bar-track"><div class="bar-fill" style="width:82%;"></div></div><span class="val">3,120</span></div>
+            <div class="bar-row"><span class="lbl">Gate B</span><div class="bar-track"><div class="bar-fill" style="width:64%;"></div></div><span class="val">2,430</span></div>
+            <div class="bar-row"><span class="lbl">Gate C</span><div class="bar-track"><div class="bar-fill" style="width:71%;"></div></div><span class="val">2,690</span></div>
+            <div class="bar-row"><span class="lbl">Gate D</span><div class="bar-track"><div class="bar-fill" style="width:40%;"></div></div><span class="val">1,502</span></div>
+          </div>
+        </div>
+        <div class="col" style="position:relative;">
+          <div class="wf-text-line" style="width:120px;height:11px;"></div>
+          <div class="wf-block solidline" style="padding:0;margin-top:8px;max-height:190px;overflow:hidden;">
+            
+              <div style="display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;">
+                <span>Amaka O. — Gate B</span><span class="wf-tag ok" style="font-size:9.5px;">checked in</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;">
+                <span>Chidi E. — Gate A</span><span class="wf-tag ok" style="font-size:9.5px;">checked in</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;">
+                <span>Fatima Y. — Gate C</span><span class="wf-tag ok" style="font-size:9.5px;">checked in</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;">
+                <span>Tunde A. — Gate A</span><span class="wf-tag ok" style="font-size:9.5px;">checked in</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;">
+                <span>Grace N. — Gate D</span><span class="wf-tag ok" style="font-size:9.5px;">checked in</span>
+              </div>
+          </div>
+          <span class="callout" style="top:-8px;right:-8px;">3</span>
+        </div>
+      </div>
+    </div></div>
+  
+    <div class="annotations">
+      <h3>Notes for dev / design</h3>
+      <ol><li><span class="num">1</span><span>Sync status badge: switches to “Pending sync — 3 gates” (amber) when any device hasn't reported in recently, so organizers know the counts may lag.</span></li><li><span class="num">2</span><span>Attendance rate and all stat cards recompute as scan logs sync in from gate devices — not purely real-time if gates are offline.</span></li><li><span class="num">3</span><span>Live feed is a scrolling list of most recent successful check-ins across all gates, newest first.</span></li></ol>
+    </div>
+  </div>
+  </main>
+</div>
+
+<footer>Click a screen on the left to view it · Numbered markers correspond to the notes below each screen</footer>
+
+<script>
+const screens = {
+
+register: {
+  title: "01 · Public Registration Page",
+  desc: "Self-registration form for participants. Tenant-branded per client/event. Public link, no login required.",
+  render: () => `
+    <div class="frame"><div class="frame-inner">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <div class="wf-block" style="width:36px;height:36px;border-radius:8px;"></div>
+        <div style="flex:1">
+          <div class="wf-text-line" style="width:140px;height:11px;"></div>
+          <div class="wf-text-line" style="width:220px;"></div>
+        </div>
+        <span class="callout" style="position:relative;top:0;left:0;">1</span>
+      </div>
+
+      <div class="wf-block" style="height:120px;margin-bottom:22px;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-size:12px;">
+        Event banner image
+      </div>
+
+      <div class="wf-text-line" style="width:60%;height:14px;margin-bottom:14px;"></div>
+
+      <div class="row" style="margin-bottom:12px;">
+        <div class="col"><div class="wf-input">Full name</div></div>
+        <div class="col"><div class="wf-input">Email address</div></div>
+      </div>
+      <div class="row" style="margin-bottom:12px;">
+        <div class="col"><div class="wf-input">Phone number</div></div>
+        <div class="col" style="position:relative;">
+          <div class="wf-input">Custom field (event-specific)</div>
+          <span class="callout" style="top:-8px;right:-8px;">2</span>
+        </div>
+      </div>
+
+      <div style="position:relative;margin-top:20px;">
+        <button class="wf-btn" style="width:100%;padding:12px;">Register for this event</button>
+        <span class="callout" style="top:-8px;right:-8px;">3</span>
+      </div>
+    </div></div>
+
+    <div class="frame" style="margin-top:16px;"><div class="frame-inner" style="text-align:center;padding:34px 22px;position:relative;">
+      <div class="wf-block" style="width:50px;height:50px;border-radius:50%;margin:0 auto 14px;"></div>
+      <div class="wf-text-line" style="width:260px;margin:0 auto 8px;height:13px;"></div>
+      <div class="wf-text-line" style="width:200px;margin:0 auto;"></div>
+      <span class="callout" style="top:8px;right:8px;">4</span>
+    </div></div>
+  `,
+  notes: [
+    "Header shows the client's own logo and event name/date/location — pulled from tenant branding settings.",
+    "Form fields are configurable per event; organizer defines which custom fields appear here.",
+    "On submit: validate, create participant record (status = Registered), generate signed QR token, and queue the confirmation email as a background job.",
+    "Post-submit confirmation screen — no QR shown on-screen; it arrives by email to avoid screenshotting/sharing temptation.",
+  ]
+},
+
+dashboard: {
+  title: "02 · Client Admin Dashboard — Overview",
+  desc: "Landing screen for event organizers once an event is live. Real-time (sync-aware) check-in visibility.",
+  render: () => `
+    <div class="frame"><div class="frame-inner">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <div class="wf-text-line" style="width:180px;height:14px;margin:0;"></div>
+        <div style="display:flex;gap:8px;align-items:center;position:relative;">
+          <span class="wf-tag ok">● Live sync</span>
+          <span class="callout" style="position:relative;top:0;left:0;">1</span>
+        </div>
+      </div>
+
+      <div class="row" style="margin-bottom:20px;">
+        <div class="stat-card"><div class="num">14,208</div><div class="lbl">Registered</div></div>
+        <div class="stat-card"><div class="num">9,742</div><div class="lbl">Checked In</div></div>
+        <div class="stat-card"><div class="num">4,466</div><div class="lbl">Remaining</div></div>
+        <div class="stat-card" style="position:relative;"><div class="num">68%</div><div class="lbl">Attendance rate</div><span class="callout" style="top:-8px;right:-8px;">2</span></div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1.3;">
+          <div class="wf-text-line" style="width:140px;height:11px;"></div>
+          <div class="wf-block solidline" style="padding:10px;margin-top:8px;">
+            <div class="bar-row"><span class="lbl">Gate A</span><div class="bar-track"><div class="bar-fill" style="width:82%;"></div></div><span class="val">3,120</span></div>
+            <div class="bar-row"><span class="lbl">Gate B</span><div class="bar-track"><div class="bar-fill" style="width:64%;"></div></div><span class="val">2,430</span></div>
+            <div class="bar-row"><span class="lbl">Gate C</span><div class="bar-track"><div class="bar-fill" style="width:71%;"></div></div><span class="val">2,690</span></div>
+            <div class="bar-row"><span class="lbl">Gate D</span><div class="bar-track"><div class="bar-fill" style="width:40%;"></div></div><span class="val">1,502</span></div>
+          </div>
+        </div>
+        <div class="col" style="position:relative;">
+          <div class="wf-text-line" style="width:120px;height:11px;"></div>
+          <div class="wf-block solidline" style="padding:0;margin-top:8px;max-height:190px;overflow:hidden;">
+            ${["Amaka O. — Gate B","Chidi E. — Gate A","Fatima Y. — Gate C","Tunde A. — Gate A","Grace N. — Gate D"].map(n=>`
+              <div style="display:flex;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;">
+                <span>${n}</span><span class="wf-tag ok" style="font-size:9.5px;">checked in</span>
+              </div>`).join("")}
+          </div>
+          <span class="callout" style="top:-8px;right:-8px;">3</span>
+        </div>
+      </div>
+    </div></div>
+  `,
+  notes: [
+    "Sync status badge: switches to “Pending sync — 3 gates” (amber) when any device hasn't reported in recently, so organizers know the counts may lag.",
+    "Attendance rate and all stat cards recompute as scan logs sync in from gate devices — not purely real-time if gates are offline.",
+    "Live feed is a scrolling list of most recent successful check-ins across all gates, newest first.",
+  ]
+},
+
+participants: {
+  title: "03 · Participants Table",
+  desc: "Full registrant list for an event, with registration and check-in status side by side.",
+  render: () => `
+    <div class="frame"><div class="frame-inner">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+        <div class="wf-input" style="width:220px;">Search participants…</div>
+        <div style="display:flex;gap:8px;position:relative;">
+          <button class="wf-btn ghost">Bulk upload</button>
+          <button class="wf-btn">Export</button>
+          <span class="callout" style="top:-8px;right:-8px;">1</span>
+        </div>
+      </div>
+
+      <table class="wf-table">
+        <tr><th>Name</th><th>Email</th><th>Registered</th><th>Checked in</th><th>Source</th><th></th></tr>
+        ${[
+          ["Amaka Obi","amaka@…","✓ Sep 12, 9:02am","✓ Sep 17, 8:14am · Gate B","Self"],
+          ["Chidi Eze","chidi@…","✓ Sep 10, 4:30pm","✓ Sep 17, 8:03am · Gate A","Bulk"],
+          ["Fatima Yusuf","fatima@…","✓ Sep 14, 11:20am","— Not yet","Self"],
+          ["Tunde Adisa","tunde@…","✓ Sep 09, 2:11pm","✓ Sep 17, 8:20am · Gate A","Self"],
+          ["Grace Nnamdi","grace@…","✓ Sep 15, 6:45pm","— Not yet","Bulk"],
+        ].map(r=>`<tr>
+            <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td>
+            <td>${r[3].startsWith("✓") ? `<span class="wf-tag ok">${r[3]}</span>` : `<span class="wf-tag">${r[3]}</span>`}</td>
+            <td>${r[4]}</td><td><span style="color:var(--accent);font-size:12px;cursor:pointer;">Resend QR</span></td>
+          </tr>`).join("")}
+      </table>
+    </div></div>
+  `,
+  notes: [
+    "Bulk upload opens a modal: drop an Excel/CSV, map columns, preview, confirm — generates QR codes and sends emails as a background batch.",
+    "Table is filterable/sortable by registered/checked-in/source; supports the same segments used in Messaging.",
+    "“Resend QR” re-triggers the email for a single participant — for lost/undelivered emails.",
+  ]
+},
+
+messaging: {
+  title: "04 · Messaging",
+  desc: "Compose and send segmented messages to registrants — email primary, SMS/WhatsApp optional add-on.",
+  render: () => `
+    <div class="frame"><div class="frame-inner">
+      <div class="row">
+        <div class="col" style="flex:1.2;">
+          <div class="wf-text-line" style="width:120px;height:11px;"></div>
+          <div class="wf-block solidline" style="padding:16px;margin-top:8px;">
+            <div style="display:flex;gap:8px;margin-bottom:12px;position:relative;">
+              <span class="wf-tag accent">Email</span><span class="wf-tag">SMS</span><span class="wf-tag">WhatsApp</span>
+              <span class="callout" style="top:-8px;right:-8px;">1</span>
+            </div>
+            <div class="wf-input" style="margin-bottom:10px;">Segment: Registered, not checked in ▾</div>
+            <div class="wf-input" style="margin-bottom:10px;">Subject line</div>
+            <div class="wf-block" style="height:110px;padding:10px;font-size:12px;color:var(--ink-soft);">Message body / template…</div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+              <button class="wf-btn ghost">Preview</button>
+              <button class="wf-btn">Send to 4,466 people</button>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="wf-text-line" style="width:100px;height:11px;"></div>
+          <div class="wf-block solidline" style="padding:0;margin-top:8px;">
+            ${[["Reminder — Gates open 8am","Email","Sent · 14,208"],["Entry code resend","Email","Sent · 212"],["Traffic advisory","WhatsApp","Sent · 9,740"]].map(r=>`
+              <div style="padding:10px 12px;border-bottom:1px solid var(--line);">
+                <div style="font-size:12px;font-weight:600;">${r[0]}</div>
+                <div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">${r[1]} · ${r[2]}</div>
+              </div>`).join("")}
+          </div>
+        </div>
+      </div>
+    </div></div>
+  `,
+  notes: [
+    "Channel toggle: SMS/WhatsApp tabs are greyed out / show a “connect provider” state until the client enables the add-on (e.g., via Termii).",
+    "Segments reuse the same filters as the Participants table (all / not-yet-checked-in / checked-in / custom list).",
+    "Send button shows the live recipient count for the selected segment before sending.",
+  ]
+},
+
+reports: {
+  title: "05 · Reports",
+  desc: "Post-event exports for attendance, no-shows, gate breakdowns, and flagged/duplicate scans.",
+  render: () => `
+    <div class="frame"><div class="frame-inner">
+      <div class="wf-text-line" style="width:140px;height:12px;margin-bottom:16px;"></div>
+      ${[
+        ["Full attendance list","14,208 rows · all registrants with status"],
+        ["No-shows","4,466 rows · registered, not checked in"],
+        ["Check-in by gate & time","Hourly breakdown across 4 gates"],
+        ["Flagged / duplicate scans","38 rows · conflicts resolved on sync"],
+      ].map((r,i)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;${i===0?'position:relative;':''}">
+          <div>
+            <div style="font-size:13px;font-weight:600;">${r[0]}</div>
+            <div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">${r[1]}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="wf-tag">CSV</span><span class="wf-tag">PDF</span>
+            <button class="wf-btn ghost" style="padding:6px 12px;">Download</button>
+          </div>
+          ${i===0?'<span class="callout" style="top:-8px;right:-8px;">1</span>':''}
+        </div>`).join("")}
+    </div></div>
+  `,
+  notes: [
+    "Each report generates on demand (server-side) in the chosen format; large exports (10K+ rows) run as a background job with a “ready to download” notification.",
+    "Historical reports remain accessible per event even after the event closes, supporting the client's multi-event history.",
+  ]
+},
+
+scanner: {
+  title: "06 · Gate Scanner App — Mobile",
+  desc: "Installed on gate staff's own phone. In-app camera only — never the OS camera roll. Fully offline-capable.",
+  render: () => `
+    <div class="phone"><div class="phone-screen">
+      <div class="phone-notch"><div class="pill"></div></div>
+      <div class="gate-strip">
+        <span>Gate B · Staff: J. Okafor</span>
+        <span class="wf-tag" id="scanner-net-tag">● offline</span>
+      </div>
+      <div class="scan-viewport" id="scan-viewport">
+        <div class="scan-frame">
+          <div class="scan-corner tl"></div><div class="scan-corner tr"></div>
+          <div class="scan-corner bl"></div><div class="scan-corner br"></div>
+        </div>
+      </div>
+      <div id="scan-result-area"></div>
+      <div class="queue-strip"><span id="queue-label">14 scans queued</span><span>Last sync 6m ago</span></div>
+    </div></div>
+    <div class="switcher" id="scan-switcher">
+      <button data-state="idle" class="active">Idle / scanning</button>
+      <button data-state="valid">Valid scan</button>
+      <button data-state="duplicate">Duplicate</button>
+      <button data-state="invalid">Invalid</button>
+    </div>
+  `,
+  notes: [
+    "Offline badge switches between “● offline (queued)” and “● synced” — validation still works fully offline using the pre-downloaded encrypted token set.",
+    "Valid scan: green confirmation with participant name; auto-clears after ~2 seconds back to the scan viewport.",
+    "Duplicate scan: amber warning showing where/when the code was first used — staff is trained this can occasionally happen retroactively after sync reconciliation.",
+    "Invalid scan: red error for an unrecognized or malformed code — no participant match found in the cached token set.",
+    "Use the buttons below the phone to preview each state.",
+  ]
+},
+
+superadmin: {
+  title: "07 · Super Admin Console",
+  desc: "Platform-owner view for managing every client tenant, their domains, and usage.",
+  render: () => `
+    <div class="frame"><div class="frame-inner">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;position:relative;">
+        <div class="wf-text-line" style="width:160px;height:13px;margin:0;"></div>
+        <button class="wf-btn">+ Add new client</button>
+        <span class="callout" style="top:-8px;right:-8px;">1</span>
+      </div>
+      <table class="wf-table">
+        <tr><th>Client</th><th>Domain</th><th>Plan</th><th>Events run</th><th>Participants processed</th><th>Status</th></tr>
+        ${[
+          ["Preggo Fest","checkin.preggofest.com","Growth","3","28,400","Active"],
+          ["Stem Professionals","checkin.stemprofs.com","Starter","1","2,150","Active"],
+          ["School of Fortune","checkin.schooloffortune.ng","Starter","5","6,700","Active"],
+        ].map(r=>`<tr>
+            <td>${r[0]}</td><td style="color:var(--accent);">${r[1]}</td><td>${r[2]}</td>
+            <td>${r[3]}</td><td>${r[4]}</td><td><span class="wf-tag ok">${r[5]}</span></td>
+          </tr>`).join("")}
+      </table>
+    </div></div>
+  `,
+  notes: [
+    "“Add new client” flow: client name → domain setup (CNAME instructions shown) → branding upload → invite first Client Admin.",
+    "Table gives the platform owner a portfolio view across every licensed client for billing and support purposes.",
+  ]
+}
+
+};
+
+const canvas = document.getElementById("canvas");
+const nav = document.getElementById("nav");
+
+function renderScreen(key){
+  const s = screens[key];
+  canvas.innerHTML = `
+    <div class="screen-head"><h2>${s.title}</h2><p>${s.desc}</p></div>
+    ${s.render()}
+    <div class="annotations">
+      <h3>Notes for dev / design</h3>
+      <ol>${s.notes.map((n,i)=>`<li><span class="num">${i+1}</span><span>${n}</span></li>`).join("")}</ol>
+    </div>
+  `;
+  [...nav.querySelectorAll("button")].forEach(b=>b.classList.toggle("active", b.dataset.screen===key));
+
+  if(key==="scanner"){ initScanner(); }
+}
+
+nav.addEventListener("click", (e)=>{
+  const btn = e.target.closest("button[data-screen]");
+  if(!btn) return;
+  renderScreen(btn.dataset.screen);
+});
+
+function initScanner(){
+  const switcher = document.getElementById("scan-switcher");
+  const viewport = document.getElementById("scan-viewport");
+  const resultArea = document.getElementById("scan-result-area");
+  const netTag = document.getElementById("scanner-net-tag");
+  const queueLabel = document.getElementById("queue-label");
+
+  function setState(state){
+    [...switcher.querySelectorAll("button")].forEach(b=>b.classList.toggle("active", b.dataset.state===state));
+    if(state==="idle"){
+      viewport.style.display="flex";
+      resultArea.innerHTML="";
+      netTag.textContent="● offline";
+      queueLabel.textContent="14 scans queued";
+      return;
+    }
+    viewport.style.display="none";
+    if(state==="valid"){
+      netTag.textContent="● offline";
+      queueLabel.textContent="15 scans queued";
+      resultArea.innerHTML = `
+        <div class="scan-result" style="background:#e5f5ec;">
+          <div class="headline" style="color:var(--ok);">✓ Checked In</div>
+          <div class="sub" style="color:#1f8a4c;">Amaka Obi · Ticket #AO-14208</div>
+          <div class="sub">Scanned 08:14am · Gate B</div>
+        </div>`;
+    } else if(state==="duplicate"){
+      resultArea.innerHTML = `
+        <div class="scan-result" style="background:#fbf1dc;">
+          <div class="headline" style="color:var(--warn);">⚠ Already Used</div>
+          <div class="sub" style="color:#8a6d1f;">First scanned 08:02am · Gate A</div>
+          <div class="sub">This code cannot be used again.</div>
+        </div>`;
+    } else if(state==="invalid"){
+      resultArea.innerHTML = `
+        <div class="scan-result" style="background:#fbe9e9;">
+          <div class="headline" style="color:var(--err);">✕ Invalid Code</div>
+          <div class="sub" style="color:#8a2f2f;">Not recognized for this event.</div>
+        </div>`;
+    }
+  }
+
+  switcher.addEventListener("click",(e)=>{
+    const btn = e.target.closest("button[data-state]");
+    if(!btn) return;
+    setState(btn.dataset.state);
+  });
+}
+
+renderScreen("register");
+</script>
+
+
+</body></html>

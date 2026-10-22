@@ -1,0 +1,38 @@
+name: event-checkin-local
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: eventcheckin
+      POSTGRES_PASSWORD: local_dev_only
+      POSTGRES_DB: eventcheckin
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventcheckin -d eventcheckin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://eventcheckin:local_dev_only@db:5432/eventcheckin
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - api
+volumes:
+  postgres_data:
+

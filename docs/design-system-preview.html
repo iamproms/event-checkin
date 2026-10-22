@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en" data-font="inter" data-theme="light" data-neutral="warm" data-accent="evergreen" data-density="comfortable" data-radius="precise" data-input="keyboard">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Quiet Precision — design foundations laboratory</title>
+  <style>
+    @font-face { font-family: "Inter Lab"; src: url("assets/fonts/InterVar.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Geist Lab"; src: url("assets/fonts/GeistLatin.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --font: "Inter Lab", Arial, sans-serif;
+      --canvas: #F7F6F3; --surface: #FFFFFF; --subtle: #F1F0EC; --text: #20231F; --muted: #555B54;
+      --line: #D9DCD5; --control-line: #777F74; --accent: #205B4A; --accent-ink: #FFFFFF;
+      --focus: #205B4A; --selected: #F1F0EC; --destructive: #8D2630; --destructive-ink: #FFFFFF;
+      --success-bg: #EBF5E9; --success-ink: #2C6532;
+      --warning-bg: #FCF2DC; --warning-ink: #714B0B;
+      --danger-bg: #FCEBED; --danger-ink: #8D2630;
+      --info-bg: #EAF1F7; --info-ink: #334E68;
+      --control-radius: 4px; --surface-radius: 8px; --control-height: 44px; --row-height: 44px;
+      --control-x: 14px; --section-gap: 32px; --inset: 20px;
+      color-scheme: light;
+    }
+    :root[data-font="geist"] { --font: "Geist Lab", Arial, sans-serif; }
+    :root[data-neutral="gray"][data-theme="light"] {
+      --canvas: #F7F8FA; --surface: #FFFFFF; --subtle: #F1F3F5; --text: #20242A; --muted: #57606B;
+      --line: #D8DDE3; --control-line: #78818C; --selected: #F1F3F5;
+    }
+    :root[data-theme="dark"] {
+      --canvas: #171816; --surface: #21231F; --subtle: #292C27; --text: #F4F4F1; --muted: #C2C8BE;
+      --line: #434942; --control-line: #8C958A; --selected: #292C27;
+      --accent: #A6D7C5; --accent-ink: #111817; --focus: #A6D7C5; --destructive: #FFDADF; --destructive-ink: #211519;
+      --success-bg: #283B28; --success-ink: #D8F1D0;
+      --warning-bg: #473516; --warning-ink: #FFE8BB;
+      --danger-bg: #4B252B; --danger-ink: #FFDADF;
+      --info-bg: #273B4D; --info-ink: #D8EAF8;
+      color-scheme: dark;
+    }
+    :root[data-neutral="gray"][data-theme="dark"] {
+      --canvas: #15171A; --surface: #202328; --subtle: #292D33; --text: #F4F6F8; --muted: #C4CBD3;
+      --line: #444B55; --control-line: #929BA6; --selected: #292D33;
+    }
+    :root[data-theme="light"][data-accent="slate"] { --accent: #355B83; --focus: #355B83; }
+    :root[data-theme="light"][data-accent="graphite"] { --accent: #303A43; --focus: #303A43; }
+    :root[data-theme="dark"][data-accent="slate"] { --accent: #A9C8EC; --focus: #A9C8EC; }
+    :root[data-theme="dark"][data-accent="graphite"] { --accent: #C8D0D7; --focus: #C8D0D7; }
+    :root[data-density="compact"] { --control-height: 38px; --row-height: 36px; --control-x: 11px; --section-gap: 24px; --inset: 16px; }
+    :root[data-radius="precise"] { --control-radius: 4px; --surface-radius: 8px; }
+    html { background: var(--canvas); }
+    body { margin: 0; background: var(--canvas); color: var(--text); font: 400 15px/1.6 var(--font); }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+    .wrap { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+    header { border-bottom: 1px solid var(--line); padding: 30px 0 26px; }
+    h1 { font-size: clamp(26px, 3.4vw, 32px); line-height: 1.2; letter-spacing: -.025em; font-weight: 600; margin: 0 0 8px; }
+    h2 { font-size: 20px; line-height: 1.4; letter-spacing: -.015em; font-weight: 600; margin: 0 0 5px; }
+    h3 { font-size: 16px; line-height: 1.5; font-weight: 600; margin: 0 0 10px; }
+    p { margin: 0; }
+    .intro { max-width: 78ch; color: var(--muted); }
+    .review-state { margin-top: 16px; font-size: 13px; color: var(--muted); }
+    main { padding: 28px 0 70px; }
+    .section { margin-top: var(--section-gap); }
+    .section:first-child { margin-top: 0; }
+    .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 14px; }
+    .section-head p { max-width: 60ch; color: var(--muted); font-size: 14px; }
+    .controls { border: 1px solid var(--line); border-radius: var(--surface-radius); background: var(--surface); padding: var(--inset); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+    fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    legend { padding: 0; margin-bottom: 7px; font-size: 14px; font-weight: 600; }
+    .choice-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .choice { min-height: 36px; padding: 6px 11px; background: var(--surface); color: var(--text); border: 1px solid var(--control-line); border-radius: var(--control-radius); font-size: 14px; font-weight: 500; }
+    .choice[aria-pressed="true"] { background: var(--selected); border-color: var(--text); font-weight: 600; }
+    .specimen { border-top: 1px solid var(--line); padding: var(--inset) 0; }
+    .specimen:last-child { padding-bottom: 0; }
+    .specimen:first-child { border-top: 0; padding-top: 0; }
+    .specimen-grid { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 20px; }
+    .specimen-name { font-size: 14px; color: var(--muted); padding-top: 3px; }
+    .sample-stack { display: grid; gap: 12px; }
+    .type-display { font-size: 32px; line-height: 40px; font-weight: 600; letter-spacing: -.025em; }
+    .type-title { font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -.02em; }
+    .type-subtitle { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -.015em; }
+    .type-section { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.015em; }
+    .type-body { font-size: 15px; line-height: 24px; }
+    .type-component { font-size: 16px; line-height: 24px; font-weight: 500; }
+    .type-support { font-size: 14px; line-height: 20px; color: var(--muted); }
+    .type-label { font-size: 14px; line-height: 20px; font-weight: 500; }
+    .type-caption { font-size: 13px; line-height: 18px; color: var(--muted); }
+    .type-numeric { font-variant-numeric: tabular-nums; font-size: 16px; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .type-line { display: grid; grid-template-columns: 90px 1fr; align-items: baseline; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    .type-line:last-child { border: 0; padding-bottom: 0; }
+    .type-line > :last-child { overflow-wrap: anywhere; min-width: 0; }
+    .font-health { margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .font-health[data-failed="true"] { color: var(--danger-ink); }
+    .scale-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; }
+    .scale-item { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 10px; font-size: 13px; }
+    .scale-item span:first-child { font-variant-numeric: tabular-nums; color: var(--muted); }
+    .space-measure { display: flex; align-items: center; gap: 0; min-width: 0; }
+    .space-measure::before, .space-measure::after { content: ""; display: block; height: 20px; width: 1px; background: var(--control-line); flex: none; }
+    .space-measure i { display: block; width: var(--measure); max-width: 100%; height: 1px; background: var(--control-line); }
+    .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .button { min-height: var(--control-height); padding: 8px var(--control-x); border-radius: var(--control-radius); border: 1px solid var(--accent); font-weight: 600; font-size: 14px; line-height: 20px; background: var(--accent); color: var(--accent-ink); }
+    .button.secondary { border-color: var(--control-line); background: var(--surface); color: var(--text); }
+    .button.tertiary { border-color: transparent; background: transparent; color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+    .button.destructive { border-color: var(--destructive); background: var(--destructive); color: var(--destructive-ink); }
+    .button:disabled { opacity: .55; cursor: not-allowed; }
+    .button[aria-busy="true"] { opacity: 1; cursor: progress; }
+    .state-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .state-cell { display: grid; justify-items: start; align-content: start; gap: 7px; min-width: 0; }
+    .state-cell > span { color: var(--muted); font-size: 13px; }
+    .state-cell .button { max-width: 100%; }
+    .demo-hover { filter: brightness(.94); }
+    .demo-pressed { transform: scale(.97); }
+    .demo-focus { outline: 2px solid var(--focus); outline-offset: 3px; }
+    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    label.field-label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; }
+    .input { display: block; width: 100%; height: var(--control-height); padding: 8px var(--control-x); border: 1px solid var(--control-line); border-radius: var(--control-radius); background: var(--surface); color: var(--text); }
+    .input::placeholder { color: var(--muted); opacity: 1; }
+    .field-note { margin-top: 5px; color: var(--muted); font-size: 13px; }
+    .field-error { margin-top: 5px; color: var(--danger-ink); font-size: 13px; }
+    .input.invalid { border-color: var(--danger-ink); }
+    .input.demo-focus { outline: 2px solid var(--focus); outline-offset: 3px; }
+    .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .status { border: 1px solid currentColor; border-radius: var(--surface-radius); padding: 11px 13px; font-size: 14px; line-height: 20px; }
+    .status strong { display: block; font-weight: 600; }
+    .status p { margin-top: 2px; }
+    .status.success { background: var(--success-bg); color: var(--success-ink); }
+    .status.warning { background: var(--warning-bg); color: var(--warning-ink); }
+    .status.danger { background: var(--danger-bg); color: var(--danger-ink); }
+    .status.info { background: var(--info-bg); color: var(--info-ink); }
+    .treatment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .treatment { border: 1px solid var(--line); border-radius: var(--surface-radius); padding: 12px; background: var(--surface); }
+    .treatment h3 { font-size: 14px; margin: 0 0 8px; }
+    .nav-sample { display: grid; gap: 2px; }
+    .nav-item { display: block; min-height: var(--row-height); padding: 8px 11px; color: var(--muted); text-decoration: none; font-size: 14px; line-height: 20px; border-radius: var(--control-radius); border: 1px solid transparent; }
+    .nav-item.selected-fill { background: var(--selected); color: var(--text); font-weight: 600; }
+    .nav-item.selected-line { border-left-color: var(--accent); border-left-width: 2px; border-radius: 0; color: var(--text); font-weight: 600; }
+    .surface-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .surface-sample { min-height: 88px; padding: 12px; border: 1px solid var(--line); border-radius: var(--surface-radius); font-size: 14px; }
+    .surface-sample.canvas { background: var(--canvas); }
+    .surface-sample.surface { background: var(--surface); }
+    .surface-sample.subtle { background: var(--subtle); }
+    .surface-sample strong { display: block; font-weight: 600; }
+    .surface-sample span { display: block; color: var(--muted); font-size: 13px; }
+    .icon-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .icon-item { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; }
+    .icon-item svg { flex: none; color: var(--muted); fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-item span { overflow-wrap: anywhere; }
+    .float-ground { padding: 20px; background: var(--subtle); border-radius: var(--surface-radius); }
+    .float-sample { width: min(240px, 100%); padding: 8px; border-radius: var(--surface-radius); background: var(--surface); box-shadow: 0 8px 24px rgb(25 30 25 / 12%); }
+    .float-sample div { padding: 7px 9px; font-size: 14px; }
+    :root[data-theme="dark"] .float-sample { box-shadow: 0 12px 28px rgb(0 0 0 / 38%); }
+    .motion-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 14px; }
+    .motion-list div { border-top: 1px solid var(--line); padding-top: 7px; }
+    .motion-list strong { display: block; font-weight: 600; }
+    .motion-list span { color: var(--muted); }
+    .token-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px 15px; }
+    .token { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .token-bar { display: block; width: 36px; height: 20px; flex: none; border: 1px solid var(--line); background: var(--token-color); }
+    .contrast-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .contrast-item { border-top: 1px solid var(--line); padding-top: 7px; font-size: 14px; }
+    .contrast-item strong { display: block; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .contrast-item small { display: block; color: var(--muted); font-size: 12px; }
+    footer { border-top: 1px solid var(--line); padding: 18px 0 34px; color: var(--muted); font-size: 13px; }
+    a { color: inherit; text-underline-offset: 3px; }
+    @media (hover: hover) and (pointer: fine) {
+      .button:not(:disabled):not([aria-disabled="true"]):hover { filter: brightness(.96); }
+      .choice:hover, .button.secondary:hover { background: var(--subtle); }
+      .nav-item:hover { background: var(--subtle); }
+      :root[data-input="pointer"] .button:not(:disabled):not([aria-disabled="true"]):active, :root[data-input="pointer"] .choice:active { transform: scale(.97); transition: transform 120ms cubic-bezier(.23, 1, .32, 1); }
+    }
+    @media (prefers-reduced-motion: reduce) { .button:not(:disabled):active, .choice:active, .demo-pressed { transform: none; transition: none; } .demo-pressed { filter: brightness(.9); } }
+    @media (pointer: coarse) { :root[data-density="compact"] { --control-height: 44px; --row-height: 44px; } .choice { min-height: 44px; } }
+    @media (max-width: 720px) {
+      .controls, .specimen-grid, .treatment-grid { grid-template-columns: 1fr; }
+      .specimen-grid { gap: 9px; }
+      .section-head { display: block; }
+      .section-head p { margin-top: 4px; }
+      .field-grid, .status-grid, .icon-list { grid-template-columns: 1fr; }
+      .state-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .token-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 420px) {
+      .wrap { width: min(100% - 28px, 1120px); }
+      .surface-grid, .contrast-list, .scale-list, .state-list, .motion-list { grid-template-columns: 1fr; }
+      .type-line { grid-template-columns: 72px 1fr; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Quiet Precision</h1>
+      <p class="intro">A focused laboratory for comparing the platform’s visual foundations. Choose a typeface, neutral foundation, theme, accent, density, and radius. Every specimen keeps the same content as the tokens change.</p>
+      <p class="review-state">Provisional design study · Local font files · Isolated specimens only</p>
+      <p class="font-health" id="font-health" role="status" aria-live="polite">Checking local font files…</p>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="section" aria-labelledby="controls-title">
+      <div class="section-head"><h2 id="controls-title">Comparison controls</h2><p>Each choice changes only one foundation dimension.</p></div>
+      <div class="controls">
+        <fieldset data-setting="font"><legend>Typeface</legend><div class="choice-row"><button type="button" class="choice" data-value="inter" aria-pressed="true">Inter</button><button type="button" class="choice" data-value="geist" aria-pressed="false">Geist</button></div></fieldset>
+        <fieldset data-setting="neutral"><legend>Neutral foundation</legend><div class="choice-row"><button type="button" class="choice" data-value="warm" aria-pressed="true">Warm neutral</button><button type="button" class="choice" data-value="gray" aria-pressed="false">Neutral gray</button></div></fieldset>
+        <fieldset data-setting="theme"><legend>Theme</legend><div class="choice-row"><button type="button" class="choice" data-value="light" aria-pressed="true">Light</button><button type="button" class="choice" data-value="dark" aria-pressed="false">Dark</button></div></fieldset>
+        <fieldset data-setting="accent"><legend>Accent</legend><div class="choice-row"><button type="button" class="choice" data-value="evergreen" aria-pressed="true">Deep evergreen</button><button type="button" class="choice" data-value="slate" aria-pressed="false">Slate blue</button><button type="button" class="choice" data-value="graphite" aria-pressed="false">Graphite</button></div></fieldset>
+        <fieldset data-setting="density"><legend>Density</legend><div class="choice-row"><button type="button" class="choice" data-value="comfortable" aria-pressed="true">Comfortable</button><button type="button" class="choice" data-value="compact" aria-pressed="false">Compact</button></div></fieldset>
+        <fieldset data-setting="radius"><legend>Radius</legend><div class="choice-row"><button type="button" class="choice" data-value="precise" aria-pressed="true">Precise · 4 / 8</button><button type="button" class="choice" data-value="softened" aria-pressed="false">Softened · 6 / 10</button></div></fieldset>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="type-title">
+      <div class="section-head"><h2 id="type-title">Typography</h2><p>One sans family, weights 400, 500, and 600. Tabular numerals for aligned counts.</p></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Scale and hierarchy</div><div class="sample-stack">
+        <div class="type-line"><span class="meta">32 / 40</span><span class="type-display">Event attendance</span></div>
+        <div class="type-line"><span class="meta">28 / 36</span><span class="type-title">Event attendance</span></div>
+        <div class="type-line"><span class="meta">24 / 32</span><span class="type-subtitle">Participant records</span></div>
+        <div class="type-line"><span class="meta">20 / 28</span><span class="type-section">Participant records</span></div>
+        <div class="type-line"><span class="meta">16 / 24</span><span class="type-component">Registration details</span></div>
+        <div class="type-line"><span class="meta">15 / 24</span><span class="type-body">Registration details remain available for 90 days after the event ends. Export participant data before it expires if you have a lawful need to retain it.</span></div>
+        <div class="type-line"><span class="meta">14 / 20</span><span class="type-support">Last confirmed update: 14:32 WAT</span></div>
+        <div class="type-line"><span class="meta">14 / 20</span><span class="type-label">Email address</span></div>
+        <div class="type-line"><span class="meta">13 / 18</span><span class="type-caption">Supporting metadata only; never essential instructions.</span></div>
+      </div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Real content</div><div class="sample-stack">
+        <div class="type-line"><span class="meta">Names</span><span class="type-body">Ọládé Adéyẹmí · Chukwuemeka Nwankwo · Aïssatou N'Diaye</span></div>
+        <div class="type-line"><span class="meta">Long string</span><span class="type-body">events.north-central-partnership.example.org · chukwuemeka.nwankwo+conference@example.org</span></div>
+        <div class="type-line"><span class="meta">Amounts</span><span class="type-numeric">₦1,250.00 · ₦84,750.50 · ₦1,240,000.00</span></div>
+        <div class="type-line"><span class="meta">Admin copy</span><span class="type-body">Deleting participant details removes names, contact details, tickets, and participant-level reports for this event. Anonymous attendance totals remain.</span></div>
+      </div></div>
+    </section>
+
+    <section class="section" aria-labelledby="spacing-title">
+      <div class="section-head"><h2 id="spacing-title">Spacing scale</h2><p>A 4px base with a small set of named steps. Density changes use of the scale, not the scale itself.</p></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Measured gaps</div><div class="scale-list">
+        <div class="scale-item"><span>4 px</span><div class="space-measure" style="--measure:4px"><i></i></div></div>
+        <div class="scale-item"><span>8 px</span><div class="space-measure" style="--measure:8px"><i></i></div></div>
+        <div class="scale-item"><span>12 px</span><div class="space-measure" style="--measure:12px"><i></i></div></div>
+        <div class="scale-item"><span>16 px</span><div class="space-measure" style="--measure:16px"><i></i></div></div>
+        <div class="scale-item"><span>24 px</span><div class="space-measure" style="--measure:24px"><i></i></div></div>
+        <div class="scale-item"><span>32 px</span><div class="space-measure" style="--measure:32px"><i></i></div></div>
+        <div class="scale-item"><span>48 px</span><div class="space-measure" style="--measure:48px"><i></i></div></div>
+        <div class="scale-item"><span>64 px</span><div class="space-measure" style="--measure:64px"><i></i></div></div>
+      </div></div>
+    </section>
+
+    <section class="section" aria-labelledby="surface-title">
+      <div class="section-head"><h2 id="surface-title">Surfaces, borders, and color</h2><p>A single surface step and a legible border carry the grouping.</p></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Surface steps</div><div class="surface-grid"><div class="surface-sample canvas"><strong>Canvas</strong><span>Page ground</span></div><div class="surface-sample surface"><strong>Surface</strong><span>Working area</span></div><div class="surface-sample subtle"><strong>Quiet surface</strong><span>Selected grouping</span></div></div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Token roles</div><div class="token-list">
+        <div class="token"><span class="token-bar" style="--token-color:var(--text)"></span><span>Primary text</span></div>
+        <div class="token"><span class="token-bar" style="--token-color:var(--muted)"></span><span>Secondary text</span></div>
+        <div class="token"><span class="token-bar" style="--token-color:var(--line)"></span><span>Hairline border</span></div>
+        <div class="token"><span class="token-bar" style="--token-color:var(--control-line)"></span><span>Control border</span></div>
+        <div class="token"><span class="token-bar" style="--token-color:var(--accent)"></span><span>Action accent</span></div>
+        <div class="token"><span class="token-bar" style="--token-color:var(--selected)"></span><span>Selected surface</span></div>
+      </div></div>
+    </section>
+
+    <section class="section" aria-labelledby="control-title">
+      <div class="section-head"><h2 id="control-title">Controls</h2><p>Labels and boundaries stay visible. Density changes spacing, not the meaning of an action.</p></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Action hierarchy</div><div class="button-row"><button class="button" type="button">Download report</button><button class="button secondary" type="button">View details</button><button class="button tertiary" type="button">Cancel</button><button class="button destructive" type="button">Delete participant data</button></div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Interaction states</div><div class="state-list">
+        <div class="state-cell"><span>Default</span><button class="button" type="button">Download report</button></div>
+        <div class="state-cell"><span>Hover (fine pointer)</span><button class="button demo-hover" type="button">Download report</button></div>
+        <div class="state-cell"><span>Pressed</span><button class="button demo-pressed" type="button">Download report</button></div>
+        <div class="state-cell"><span>Keyboard focus</span><button class="button demo-focus" type="button">Download report</button></div>
+        <div class="state-cell"><span>Disabled</span><button class="button" type="button" disabled>Download report</button></div>
+        <div class="state-cell"><span>Loading</span><button class="button" type="button" aria-busy="true" aria-disabled="true">Preparing report…</button></div>
+      </div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Inputs</div><div class="field-grid"><div><label class="field-label" for="email">Email address</label><input class="input" id="email" type="email" placeholder="name@example.com" autocomplete="off"><p class="field-note">Used to send the entry ticket.</p></div><div><label class="field-label" for="email-focus">Email address · focus treatment</label><input class="input demo-focus" id="email-focus" type="email" value="olade@example.org"><p class="field-note">Tab into either input to inspect real focus.</p></div><div><label class="field-label" for="email-error">Email address · validation error</label><input class="input invalid" id="email-error" type="email" value="name@" aria-invalid="true" aria-describedby="email-error-text"><p class="field-error" id="email-error-text">Enter a valid email address.</p></div></div></div>
+    </section>
+
+    <section class="section" aria-labelledby="status-title">
+      <div class="section-head"><h2 id="status-title">Status language</h2><p>Semantic colors are independent of the accent and always carry text.</p></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Four states</div><div class="status-grid"><div class="status success"><strong>Checked in</strong><p>Entry was confirmed by the server.</p></div><div class="status warning"><strong>Already checked in</strong><p>Ask a supervisor for help.</p></div><div class="status danger"><strong>Ticket not valid</strong><p>Check the event ticket.</p></div><div class="status info"><strong>Could not confirm</strong><p>Check connection and retry.</p></div></div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Accent distinction</div><div class="button-row"><button class="button" type="button">Confirm action</button><div class="status success"><strong>Checked in</strong><p>Server-confirmed result.</p></div></div></div>
+    </section>
+
+    <section class="section" aria-labelledby="nav-title">
+      <div class="section-head"><h2 id="nav-title">Navigation treatments</h2><p>The same items in two restrained selected states; these are component specimens, not a page shell.</p></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Selection</div><div class="treatment-grid"><div class="treatment"><h3>Neutral fill</h3><nav class="nav-sample" aria-label="Neutral fill specimen"><a class="nav-item selected-fill" href="#nav-title" aria-current="page">Overview</a><a class="nav-item" href="#nav-title">Participants</a><a class="nav-item" href="#nav-title">Reports</a></nav></div><div class="treatment"><h3>Accent rule</h3><nav class="nav-sample" aria-label="Accent rule specimen"><a class="nav-item selected-line" href="#nav-title" aria-current="page">Overview</a><a class="nav-item" href="#nav-title">Participants</a><a class="nav-item" href="#nav-title">Reports</a></nav></div></div></div>
+    </section>
+
+    <section class="section" aria-labelledby="detail-title">
+      <div class="section-head"><h2 id="detail-title">Icons, elevation, and motion</h2><p>Functional affordances stay small. Floating layers alone receive a shadow.</p></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Icon scale</div><div class="icon-list">
+        <div class="icon-item"><svg width="14" height="14" viewBox="0 0 24 24" stroke-width="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>14px · inline cue · 1.5px stroke</span></div>
+        <div class="icon-item"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>16px · navigation · 1.5px stroke</span></div>
+        <div class="icon-item"><svg width="20" height="20" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>20px · touch action · 1.75px stroke</span></div>
+      </div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Floating surface</div><div class="float-ground"><div class="float-sample" role="img" aria-label="Floating menu surface with two rows and a soft shadow"><div>Download CSV</div><div>Download PDF</div></div></div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Motion tokens</div><div class="motion-list"><div><strong>Frequent action</strong><span>Instant state change; no entrance motion.</span></div><div><strong>Pointer press</strong><span>120ms transform to 0.97 scale; removed for reduced motion.</span></div><div><strong>Occasional overlay</strong><span>180–220ms opacity/transform, strong ease-out; not animated in this sheet.</span></div><div><strong>Exit</strong><span>140–180ms opacity/transform; reduced motion removes translation.</span></div></div></div>
+    </section>
+
+    <section class="section" aria-labelledby="contrast-title">
+      <div class="section-head"><h2 id="contrast-title">Selected contrast pairs</h2><p>Calculated from the current CSS tokens. This is a screening aid, not browser or assistive technology certification.</p></div>
+      <div class="contrast-list"><div class="contrast-item"><span>Primary text / canvas</span><strong id="ratio-primary">—</strong><small>Normal text: target ≥ 4.5:1</small></div><div class="contrast-item"><span>Secondary text / surface</span><strong id="ratio-secondary">—</strong><small>Normal text: target ≥ 4.5:1</small></div><div class="contrast-item"><span>Button text / accent</span><strong id="ratio-button">—</strong><small>Normal text: target ≥ 4.5:1</small></div><div class="contrast-item"><span>Control border / surface</span><strong id="ratio-control">—</strong><small>Meaningful boundary: target ≥ 3:1</small></div><div class="contrast-item"><span>Success text / surface</span><strong id="ratio-success">—</strong><small>Normal text: target ≥ 4.5:1</small></div><div class="contrast-item"><span>Danger text / surface</span><strong id="ratio-danger">—</strong><small>Normal text: target ≥ 4.5:1</small></div></div>
+    </section>
+
+  </main>
+  <footer><div class="wrap">Provisional foundation study. Review the typography at real reading size and compare all light, dark, neutral, and accent combinations before approval. Font licenses: <a href="assets/fonts/INTER-OFL.txt">Inter</a> · <a href="assets/fonts/GEIST-OFL.txt">Geist</a>.</div></footer>
+  <script>
+    const root = document.documentElement;
+    document.addEventListener('keydown', () => { root.dataset.input = 'keyboard'; });
+    document.addEventListener('pointerdown', () => { root.dataset.input = 'pointer'; });
+    document.querySelectorAll('fieldset[data-setting]').forEach(group => {
+      group.addEventListener('click', event => {
+        const button = event.target.closest('button[data-value]');
+        if (!button || !group.contains(button)) return;
+        const setting = group.dataset.setting;
+        root.dataset[setting] = button.dataset.value;
+        group.querySelectorAll('button[data-value]').forEach(option => {
+          option.setAttribute('aria-pressed', String(option === button));
+        });
+        updateContrast();
+      });
+    });
+    function channels(color) {
+      const value = color.trim();
+      let parts;
+      if (/^#[0-9a-f]{6}$/i.test(value)) {
+        parts = [1, 3, 5].map(index => parseInt(value.slice(index, index + 2), 16));
+      } else if (/^rgb\(/i.test(value)) {
+        parts = value.match(/[\d.]+/g).slice(0, 3).map(Number);
+      } else {
+        throw new Error('Unsupported color token: ' + value);
+      }
+      return parts.map(value => {
+        const s = value / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+    }
+    function luminance(color) {
+      const [r, g, b] = channels(color);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+    function ratio(a, b) {
+      const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return ((values[0] + 0.05) / (values[1] + 0.05)).toFixed(2) + ':1';
+    }
+    function updateContrast() {
+      const css = getComputedStyle(root);
+      const value = name => css.getPropertyValue(name).trim();
+      document.getElementById('ratio-primary').textContent = ratio(value('--text'), value('--canvas'));
+      document.getElementById('ratio-secondary').textContent = ratio(value('--muted'), value('--surface'));
+      document.getElementById('ratio-button').textContent = ratio(value('--accent-ink'), value('--accent'));
+      document.getElementById('ratio-control').textContent = ratio(value('--control-line'), value('--surface'));
+      document.getElementById('ratio-success').textContent = ratio(value('--success-ink'), value('--success-bg'));
+      document.getElementById('ratio-danger').textContent = ratio(value('--danger-ink'), value('--danger-bg'));
+    }
+    updateContrast();
+    async function checkFonts() {
+      const output = document.getElementById('font-health');
+      if (!document.fonts || !document.fonts.load) {
+        output.textContent = 'Font loading cannot be verified in this browser; system fallback may be in use.';
+        return;
+      }
+      const names = ['Inter Lab', 'Geist Lab'];
+      const results = await Promise.all(names.map(async name => {
+        try {
+          await document.fonts.load('400 16px "' + name + '"', 'Attendance 0123');
+          const face = Array.from(document.fonts).find(item => item.family === name);
+          return name.replace(' Lab', '') + ': ' + (face?.status === 'loaded' ? 'loaded' : 'fallback or unavailable');
+        } catch {
+          return name.replace(' Lab', '') + ': fallback or unavailable';
+        }
+      }));
+      output.dataset.failed = String(results.some(item => item.includes('fallback or unavailable')));
+      output.textContent = results.join(' · ') + '. Geist preview asset covers Latin characters; unsupported glyphs use the browser fallback.';
+    }
+    checkFonts();
+  </script>
+</body>
+</html>
