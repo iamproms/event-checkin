@@ -132,8 +132,8 @@ def pg() -> Iterator[DatabaseHarness]:
         baseline_url = parsed.set(database=baseline_db).render_as_string(hide_password=False)
         fresh_url = parsed.set(database=fresh_db).render_as_string(hide_password=False)
         _migrate(baseline_url, "0001_foundation")
-        _migrate(baseline_url, "0002_tenant_foundation")
-        _migrate(fresh_url, "0002_tenant_foundation")
+        _migrate(baseline_url, "head")
+        _migrate(fresh_url, "head")
         with create_engine(fresh_url).connect() as conn:
             assert (
                 conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
