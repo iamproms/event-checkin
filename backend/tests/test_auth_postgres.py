@@ -75,7 +75,7 @@ def auth_db() -> Iterator[AuthDatabase]:
         with owner.connect() as conn:
             assert (
                 conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0003_staff_identity"
+                == "0004_auth_session_invalidation"
             )
             for table in ("staff_invitations", "event_assignments"):
                 state = conn.execute(
@@ -232,6 +232,70 @@ def test_inactive_membership_denies_immediately(auth_db: AuthDatabase) -> None:
             ),
             {"tenant": auth_db.tenant_a, "user": auth_db.user},
         )
+    # Reactivating the membership must not resurrect a session issued earlier.
+    with pytest.raises(AuthDenied):
+        auth.current("auth-a.example.test", token)
+
+
+def test_status_and_role_transitions_revoke_sessions(auth_db: AuthDatabase) -> None:
+    auth = _service(auth_db)
+    _, first = auth.login(
+        "auth-a.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.31"
+    )
+    _, other_tenant = auth.login(
+        "auth-b.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.32"
+    )
+    with auth_db.owner.begin() as conn:
+        conn.execute(
+            text("UPDATE users SET status='suspended' WHERE id=:user"),
+            {"user": auth_db.user},
+        )
+        conn.execute(
+            text("UPDATE users SET status='active' WHERE id=:user"),
+            {"user": auth_db.user},
+        )
+    for host, token in (("auth-a.example.test", first), ("auth-b.example.test", other_tenant)):
+        with pytest.raises(AuthDenied):
+            auth.current(host, token)
+
+    _, first = auth.login(
+        "auth-a.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.33"
+    )
+    _, other_tenant = auth.login(
+        "auth-b.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.34"
+    )
+    with auth_db.owner.begin() as conn:
+        conn.execute(
+            text("UPDATE tenant_memberships SET role='tenant_admin' "
+                 "WHERE tenant_id=:tenant AND user_id=:user"),
+            {"tenant": auth_db.tenant_a, "user": auth_db.user},
+        )
+    _, pending_challenge = auth.login(
+        "auth-a.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.35"
+    )
+    with auth_db.owner.begin() as conn:
+        conn.execute(
+            text("UPDATE tenant_memberships SET role='gate_scanner' "
+                 "WHERE tenant_id=:tenant AND user_id=:user"),
+            {"tenant": auth_db.tenant_a, "user": auth_db.user},
+        )
+    with pytest.raises(AuthDenied):
+        auth.current("auth-a.example.test", first)
+    with pytest.raises(AuthDenied, match="challenge expired"):
+        auth.verify_mfa("auth-a.example.test", pending_challenge, "000000", ip="127.0.0.35")
+    assert auth.current("auth-b.example.test", other_tenant)[0].id == auth_db.user
+    with auth_db.owner.connect() as conn:
+        assert conn.execute(
+            text("SELECT count(*) FROM security_audit_events "
+                 "WHERE action='user.status_changed' AND metadata->>'target_user_id'=:user"),
+            {"user": str(auth_db.user)},
+        ).scalar_one() >= 2
+        assert conn.execute(
+            text("SELECT count(*) FROM security_audit_events "
+                 "WHERE action='membership.changed' AND tenant_id=:tenant "
+                 "AND metadata->>'target_user_id'=:user"),
+            {"tenant": auth_db.tenant_a, "user": str(auth_db.user)},
+        ).scalar_one() >= 2
 
 
 def test_identity_context_and_runtime_role_restriction(auth_db: AuthDatabase) -> None:
@@ -247,6 +311,17 @@ def test_identity_context_and_runtime_role_restriction(auth_db: AuthDatabase) ->
             assert conn.execute(text("SELECT count(*) FROM tenant_memberships")).scalar_one() == 0
     with auth_db.runtime.connect() as conn, pytest.raises(ProgrammingError):
         conn.execute(text("SELECT count(*) FROM auth_sessions"))
+    with pytest.raises(ProgrammingError):
+        with auth_db.runtime.begin() as conn:
+            conn.execute(
+                text("SELECT set_config('app.tenant_id', :tenant, true)"),
+                {"tenant": str(auth_db.tenant_a)},
+            )
+            conn.execute(
+                text("UPDATE tenant_memberships SET role='tenant_admin' "
+                     "WHERE tenant_id=:tenant AND user_id=:user"),
+                {"tenant": auth_db.tenant_a, "user": auth_db.user},
+            )
     with auth_db.identity.connect() as conn, pytest.raises(ProgrammingError):
         conn.execute(text("UPDATE security_audit_events SET action='tampered'"))
 
@@ -494,11 +569,28 @@ def test_invitation_and_password_reset_replay(
         )
         auth.request_reset("auth-a.example.test", "invited@example.test", "127.0.0.7")
         reset = parse_qs(urlsplit(email.links[-1]).fragment)["token"][0]
+        auth.request_reset("auth-a.example.test", "invited@example.test", "127.0.0.17")
+        second_reset = parse_qs(urlsplit(email.links[-1]).fragment)["token"][0]
         auth.complete_reset("auth-a.example.test", reset, "new safe unlisted password value")
         with pytest.raises(AuthDenied):
             auth.current("auth-a.example.test", invited_session)
         with pytest.raises(AuthDenied):
             auth.complete_reset("auth-a.example.test", reset, "yet another safe password")
+        with pytest.raises(AuthDenied):
+            auth.complete_reset("auth-a.example.test", second_reset, "yet another safe password")
+        auth.request_reset("auth-a.example.test", "invited@example.test", "127.0.0.27")
+        suspended_reset = parse_qs(urlsplit(email.links[-1]).fragment)["token"][0]
+        with auth_db.owner.begin() as conn:
+            conn.execute(
+                text("UPDATE users SET status='suspended' WHERE id=:user"),
+                {"user": invited_user},
+            )
+            conn.execute(
+                text("UPDATE users SET status='active' WHERE id=:user"),
+                {"user": invited_user},
+            )
+        with pytest.raises(AuthDenied):
+            auth.complete_reset("auth-a.example.test", suspended_reset, "yet another safe password")
     finally:
         _restore_scanner(auth_db)
 
@@ -527,11 +619,23 @@ def test_mfa_enrollment_and_replay(auth_db: AuthDatabase) -> None:
             "auth-a.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.8"
         )
         assert state == "enroll"
+        second_enrollment_state, stale_enrollment = auth.login(
+            "auth-a.example.test",
+            "staff@example.test",
+            "correct horse battery staple",
+            "127.0.0.18",
+        )
+        assert second_enrollment_state == "enroll"
         secret = auth.enroll_totp("auth-a.example.test", challenge)
         code = totp_code(secret, int(datetime.now(UTC).timestamp() // 30))
         session, recovery = auth.verify_mfa("auth-a.example.test", challenge, code, ip="127.0.0.8")
         assert len(recovery) == 10
         assert auth.current("auth-a.example.test", session)[0].id == auth_db.user
+        next_code = totp_code(secret, int(datetime.now(UTC).timestamp() // 30) + 1)
+        with pytest.raises(AuthDenied, match="enrollment already completed"):
+            auth.verify_mfa(
+                "auth-a.example.test", stale_enrollment, next_code, ip="127.0.0.18"
+            )
         state, challenge = auth.login(
             "auth-a.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.9"
         )

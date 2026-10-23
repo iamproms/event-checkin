@@ -149,6 +149,12 @@ def login(
         )
     except (AuthDenied, ValueError) as exc:
         raise handle_error(exc) from exc
+    previous = request.cookies.get(SESSION_COOKIE)
+    if previous:
+        auth.logout(previous)
+    previous_challenge = request.cookies.get(CHALLENGE_COOKIE)
+    if previous_challenge:
+        auth.cancel_challenge(previous_challenge)
     clear_cookie(response, SESSION_COOKIE)
     clear_cookie(response, CHALLENGE_COOKIE)
     if state == "session":

@@ -69,6 +69,11 @@ class Settings(BaseSettings):
                     raise ValueError("remote environments cannot use a loopback database")
                 if parsed.query.get("sslmode") not in {"require", "verify-ca", "verify-full"}:
                     raise ValueError("remote database URL requires a TLS enforcing sslmode")
+                if (
+                    self.app_env == Environment.PRODUCTION
+                    and parsed.query.get("sslmode") != "verify-full"
+                ):
+                    raise ValueError("production database URL requires sslmode=verify-full")
         return self
 
 

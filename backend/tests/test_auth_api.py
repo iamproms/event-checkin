@@ -3,6 +3,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.auth import CHALLENGE_COOKIE, SESSION_COOKIE
 from app.core.config import Settings
 
 pytestmark = pytest.mark.skipif(
@@ -55,3 +56,43 @@ def test_cross_origin_mutation_rejected(app_factory: object) -> None:
             "/api/v1/auth/logout", headers={"x-csrf-token": token, "origin": "https://evil.test"}
         )
         assert response.status_code == 403
+
+
+def test_successful_login_revokes_previous_session_and_challenge(app_factory: object) -> None:
+    class RecordingAuth:
+        def __init__(self) -> None:
+            self.revoked: list[str] = []
+            self.cancelled: list[str] = []
+
+        def login(self, hostname: str, email: str, password: str, ip: str) -> tuple[str, str]:
+            assert hostname == "testserver"
+            return "session", "new-session"
+
+        def logout(self, token: str) -> None:
+            self.revoked.append(token)
+
+        def cancel_challenge(self, token: str) -> None:
+            self.cancelled.append(token)
+
+    settings = Settings(
+        app_env="test",
+        database_url="postgresql+psycopg://runtime:local@localhost:5432/test",
+    )
+    app = app_factory(settings=settings)  # type: ignore[operator]
+    auth = RecordingAuth()
+    app.state.auth_service = auth
+    with TestClient(app, base_url="https://testserver") as client:
+        csrf = client.get("/api/v1/auth/csrf").json()["csrf_token"]
+        client.cookies.set(SESSION_COOKIE, "previous-session")
+        client.cookies.set(CHALLENGE_COOKIE, "previous-challenge")
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "staff@example.test", "password": "example password"},
+            headers={"x-csrf-token": csrf},
+        )
+        assert response.status_code == 200
+        assert auth.revoked == ["previous-session"]
+        assert auth.cancelled == ["previous-challenge"]
+        assert any(
+            "new-session" in cookie for cookie in response.headers.get_list("set-cookie")
+        )

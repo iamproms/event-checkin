@@ -64,7 +64,7 @@ npm run build
 
 ## Environment and migration policy
 
-`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002_tenant_foundation` and `0003_staff_identity` add tenant isolation and staff identity respectively. See [schema notes](docs/M1-02_SCHEMA_NOTES.md) and [identity contracts](docs/M1-03_AUTH_CONTRACTS.md).
+`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. Production requires `sslmode=verify-full` for both runtime and identity connections and a trusted database CA. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002_tenant_foundation`, `0003_staff_identity`, and `0004_auth_session_invalidation` add tenant isolation, staff identity, and session invalidation respectively. See [schema notes](docs/M1-02_SCHEMA_NOTES.md) and [identity contracts](docs/M1-03_AUTH_CONTRACTS.md).
 
 Run migrations as a **single release step before routing traffic to new code**. Back up first, review generated SQL and destructive operations, and rehearse on staging. Prefer a forward fix after a migration reaches production; downgrade only when explicitly reviewed as safe for existing data. The baseline and M1-02 migration can be upgraded and downgraded on an empty database; do not downgrade a populated database without a reviewed data plan.
 

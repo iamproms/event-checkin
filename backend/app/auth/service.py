@@ -293,6 +293,8 @@ class AuthService:
             totp = db.get(TotpCredential, challenge.user_id, with_for_update=True)
             if totp is None or totp.key_id != self.settings.auth_key_id:
                 raise AuthDenied("MFA is unavailable")
+            if challenge.purpose == "enroll" and totp.confirmed_at is not None:
+                raise AuthDenied("MFA enrollment already completed")
             issued_codes: list[str] = []
             if recovery:
                 if challenge.purpose != "mfa":
@@ -413,6 +415,9 @@ class AuthService:
         with Session(self.engine) as db, db.begin():
             tenant = self._tenant(db, hostname)
             member = self._member(db, tenant, user.id)
+            live_user = db.get(User, user.id)
+            if live_user is None or live_user.status != "active":
+                raise AuthDenied("Session expired")
             live_session = db.scalar(
                 select(AuthSession).where(AuthSession.token_digest == token_digest(raw))
             )
@@ -641,11 +646,21 @@ class AuthService:
             if row is None or row.consumed_at is not None or row.expires_at <= utcnow():
                 raise AuthDenied("Reset link expired")
             self._member(db, tenant, row.user_id)
+            user = db.get(User, row.user_id)
+            if user is None or user.status != "active":
+                raise AuthDenied("Reset link expired")
             credential = db.get(PasswordCredential, row.user_id)
             if credential is None:
                 raise AuthDenied("Reset link expired")
             credential.password_hash, credential.changed_at = hashed, utcnow()
-            row.consumed_at = utcnow()
+            db.execute(
+                update(PasswordResetToken)
+                .where(
+                    PasswordResetToken.user_id == row.user_id,
+                    PasswordResetToken.consumed_at.is_(None),
+                )
+                .values(consumed_at=utcnow())
+            )
             db.execute(
                 update(AuthSession)
                 .where(
