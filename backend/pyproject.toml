@@ -13,6 +13,8 @@ dependencies = [
   "sqlalchemy>=2.0,<3",
   "psycopg[binary]>=3.2,<4",
   "alembic>=1.13,<2",
+  "argon2-cffi>=25.1,<26",
+  "cryptography>=50,<51",
 ]
 
 [project.optional-dependencies]
