@@ -28,7 +28,7 @@ All paths are under `/api/v1/auth`. JSON mutations require `X-CSRF-Token` from `
 | `POST /invitations/accept` | `{token,password}` | Full scanner session or narrow MFA challenge |
 | `POST /memberships/{user_id}/revoke` | Authorized tenant owner/admin session | Membership and affected tenant sessions revoked; `{state:"revoked"}` |
 
-Invitation and reset tokens are sent through the email adapter after database commit, never returned by the API or logged. Links put the token in the URL fragment, which is not sent to the HTTP server; the browser removes it from the address bar and submits it in the protected request body. An existing user accepting a new tenant invitation supplies their current password. New passwords require a configured, SHA-256-pinned offline SHA-1 digest corpus. Missing or invalid corpus blocks new credential creation and password reset with 503. No corpus is approved for production by this implementation.
+Invitation and reset tokens are sent through the email adapter after database commit, never returned by the API or logged. Staff email inputs and the local SMTP adapter accept one mailbox only; address lists and display-name forms are rejected so one secret link cannot be delivered to multiple recipients. Links put the token in the URL fragment, which is not sent to the HTTP server; the browser removes it from the address bar and submits it in the protected request body. An existing user accepting a new tenant invitation supplies their current password. New passwords require a configured, SHA-256-pinned offline SHA-1 digest corpus. Missing or invalid corpus blocks new credential creation and password reset with 503. No corpus is approved for production by this implementation.
 
 ## Effective permissions
 

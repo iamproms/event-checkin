@@ -8,8 +8,10 @@ import pytest
 from cryptography.exceptions import InvalidTag
 from sqlalchemy import create_engine
 
+from app.api.auth import valid_email
+from app.auth.address import single_email_address
 from app.auth.corpus import CompromisedPasswordCorpus, CorpusUnavailable
-from app.auth.email import DeliveryUnavailable, DisabledEmailDelivery
+from app.auth.email import DeliveryUnavailable, DisabledEmailDelivery, SmtpEmailDelivery
 from app.auth.policy import Assignment, permits, requires_mfa, session_lifetime
 from app.auth.security import (
     accepted_totp_step,
@@ -34,6 +36,22 @@ def test_password_hash_and_verification() -> None:
     assert not verify_password(None, password)
     with pytest.raises(ValueError):
         hash_password("short")
+
+
+def test_secret_links_require_one_email_recipient() -> None:
+    assert single_email_address("  ada.okafor@example.test  ") == "ada.okafor@example.test"
+    for address in (
+        "victim@example.test, attacker@evil.test",
+        "victim@example.test; attacker@evil.test",
+        "Display Name <victim@example.test>",
+        "victim@example.test\nBcc:attacker@evil.test",
+    ):
+        with pytest.raises(ValueError):
+            valid_email(address)
+        with pytest.raises(ValueError):
+            SmtpEmailDelivery("localhost", 1025, "staff@example.test").send_link(
+                address, "Invitation", "https://example.test/invite#token=test"
+            )
 
 
 def test_token_digest_and_totp_replay() -> None:

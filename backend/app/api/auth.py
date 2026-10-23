@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import AfterValidator, BaseModel, Field
 
+from app.auth.address import single_email_address
 from app.auth.corpus import CorpusUnavailable
 from app.auth.email import DeliveryUnavailable
 from app.auth.service import AuthDenied, AuthService, Forbidden
@@ -19,10 +20,7 @@ CSRF_COOKIE = "__Host-ecs_csrf"
 
 
 def valid_email(value: str) -> str:
-    address = value.strip()
-    if len(address) > 254 or "@" not in address or not address.rsplit("@", 1)[1].count("."):
-        raise ValueError("Enter a valid email address")
-    return address
+    return single_email_address(value)
 
 
 EmailAddress = Annotated[str, AfterValidator(valid_email)]

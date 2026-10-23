@@ -10,6 +10,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from app.auth.address import single_email_address
 from app.auth.corpus import CompromisedPasswordCorpus
 from app.auth.email import DeliveryUnavailable, DisabledEmailDelivery, EmailDelivery
 from app.auth.policy import Assignment, permits, requires_mfa, session_lifetime
@@ -148,6 +149,7 @@ class AuthService:
         return raw
 
     def login(self, hostname: str, email: str, password: str, ip: str) -> tuple[str, str]:
+        email = single_email_address(email)
         keys: list[str] = []
         try:
             with Session(self.engine) as db, db.begin():
@@ -176,7 +178,7 @@ class AuthService:
         now = utcnow()
         with Session(self.engine) as db, db.begin():
             tenant = self._tenant(db, hostname)
-            user = db.scalar(select(User).where(User.email == email.strip()))
+            user = db.scalar(select(User).where(User.email == email))
             credential = db.get(PasswordCredential, user.id) if user else None
             if not verify_password(credential.password_hash if credential else None, password):
                 raise AuthDenied("Invalid credentials")
@@ -482,6 +484,7 @@ class AuthService:
         event_id: UUID | None,
         gate_id: UUID | None,
     ) -> None:
+        email = single_email_address(email)
         if isinstance(self.email, DisabledEmailDelivery):
             raise DeliveryUnavailable("Transactional email delivery is not configured")
         base_url = self._base_url(hostname)
@@ -516,7 +519,7 @@ class AuthService:
             db.add(
                 StaffInvitation(
                     tenant_id=tenant,
-                    email=email.strip(),
+                    email=email,
                     role=role,
                     event_id=event_id,
                     gate_id=gate_id,
@@ -527,7 +530,7 @@ class AuthService:
             )
             self._audit(db, "invitation.issued", actor.id, tenant, {"role": role})
         self.email.send_link(
-            email.strip(),
+            email,
             "Your staff invitation",
             f"{base_url}/invite#token={quote(invitation)}",
         )
@@ -605,6 +608,7 @@ class AuthService:
             return "session", self._session(db, user.id, tenant, invite.role, False)
 
     def request_reset(self, hostname: str, email: str, ip: str) -> None:
+        email = single_email_address(email)
         if isinstance(self.email, DisabledEmailDelivery):
             raise DeliveryUnavailable("Transactional email delivery is not configured")
         base_url = self._base_url(hostname)
@@ -614,7 +618,7 @@ class AuthService:
             self._limit(limiter, f"reset:ip:{tenant}:{ip}", utcnow(), 20)
         with Session(self.engine) as db, db.begin():
             tenant = self._tenant(db, hostname)
-            user = db.scalar(select(User).where(User.email == email.strip()))
+            user = db.scalar(select(User).where(User.email == email))
             if user is None or user.status != "active":
                 return
             member = db.get(TenantMembership, (tenant, user.id))
@@ -630,7 +634,7 @@ class AuthService:
             )
             self._audit(db, "password_reset.requested", user.id, tenant)
         self.email.send_link(
-            email.strip(), "Reset your password", f"{base_url}/reset#token={quote(raw)}"
+            email, "Reset your password", f"{base_url}/reset#token={quote(raw)}"
         )
 
     def complete_reset(self, hostname: str, token: str, password: str) -> None:

@@ -4,6 +4,8 @@ import smtplib
 from email.message import EmailMessage
 from typing import Protocol
 
+from app.auth.address import single_email_address
+
 
 class DeliveryUnavailable(RuntimeError):
     pass
@@ -25,6 +27,7 @@ class SmtpEmailDelivery:
         self.host, self.port, self.sender = host, port, sender
 
     def send_link(self, recipient: str, subject: str, link: str) -> None:
+        recipient = single_email_address(recipient)
         message = EmailMessage()
         message["To"] = recipient
         message["From"] = self.sender
