@@ -22,7 +22,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 | Gate | Decision needed | Blocks completion of | Recorded output |
 |---|---|---|---|
 | G-01 Product contracts | Registration correction/replacement and on-site registration; event cancellation/reopening; metric definitions for deletion and no-show | M2-03, M3-01, M3-03, M4-04, M5-02 | Signed product-state and metric glossary; API examples |
-| G-02 Identity and gate policy | Gate-staff password/MFA/session values, browser/device support matrix, whether any short attendee label is permitted (default proposal: status only), connectivity escalation | M1-03, M4-01, M4-03, M6-03 | Security/field-operation policy |
+| G-02 Identity and gate policy | Staff authentication, MFA, session values, and initial least-privilege permissions approved in [G-02](DECISIONS/G-02_STAFF_IDENTITY.md); browser/device support, scanner label, and connectivity escalation remain for gate operations | M4-01, M4-03, M6-03; M1-03 production activation still needs approved password corpus and email provider | Approved decision record and remaining gate-operation policy |
 | G-03 QR policy | Signed non-PII QR with encrypted stored resend copy and TLS, or another explicitly approved confidentiality model | M3-02, M4-02 | QR threat model and key-management record |
 | G-04 Communications | Transactional/promotional purposes, consent/opt-out language, sender verification, SMS/WhatsApp provider and approved templates | M3-02, M5-01/04/05 | Messaging policy and vendor onboarding record |
 | G-05 Commercial | Paystack plan prices, interval, trials, included usage, add-ons, tax, renewal/nonpayment policy | M2-02, M5-04/05 where channel charges apply, M6-03 | Plan catalog and entitlement state table |
@@ -86,7 +86,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 
 #### M1-03 — Implement staff/admin identity and authorization
 - **Objective and scope:** Invite-only accounts, login/recovery/MFA per G-02, secure host-only sessions, CSRF protection, tenant memberships, platform grants, event/gate assignments, revocation, and audited privileged actions.
-- **Dependencies:** M1-02; G-02 identity policy; M0-02 role matrix.
+- **Dependencies:** M1-02; approved G-02 identity policy and initial role matrix; provider activation and password corpus remain separate gates.
 - **Acceptance criteria:** Every API action checks server-derived tenant, active membership, role and event/gate scope; platform admins have no implicit participant access; session revocation applies on the next request.
 - **Testing requirements:** API role matrix, tenant/host/ID substitution attempts, CSRF/session fixation/revocation tests, invitation/recovery edge cases, MFA paths where required.
 - **Definition of done:** Authorization middleware and domain checks are reusable, documented and exercised by a negative-access suite.

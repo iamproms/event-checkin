@@ -1,6 +1,5 @@
 """Transaction-scoped tenant context for public domain-derived operations.
 
-Authentication and membership verification are intentionally deferred to M1-03.
 Do not pass an untrusted client tenant ID to a database transaction.
 """
 
@@ -48,5 +47,20 @@ def tenant_session_for_domain(engine: Engine, trusted_hostname: str) -> Iterator
         session.execute(
             text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
             {"tenant_id": str(tenant_id)},
+        )
+        yield session
+
+
+@contextmanager
+def authorized_tenant_session(engine: Engine, authorized_tenant_id: UUID) -> Iterator[Session]:
+    """Bind only a tenant ID returned by the server-side authorization service.
+
+    The caller must first validate the session, current active membership and
+    effective permission. The runtime role cannot bypass FORCE RLS.
+    """
+    with Session(engine) as session, session.begin():
+        session.execute(
+            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+            {"tenant_id": str(authorized_tenant_id)},
         )
         yield session
