@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { Button, Field, Status, initializeTheme, setTheme, type Theme } from "./ui";
 
 type State = "login" | "mfa" | "enroll" | "invite" | "reset" | "recover" | "session";
 type Result = { state?: State; secret?: string; recovery_codes?: string[]; message?: string; email?: string };
@@ -20,6 +21,7 @@ async function request(path: string, body: object): Promise<Result> {
 }
 
 function App() {
+  const [theme, setCurrentTheme] = useState<Theme>(initializeTheme);
   const initial: State = location.pathname === "/invite" ? "invite" : location.pathname === "/reset" ? "reset" : "login";
   const [linkToken] = useState(() => new URLSearchParams(location.hash.slice(1)).get("token"));
   const [state, setState] = useState<State>(initial);
@@ -57,7 +59,9 @@ function App() {
   };
 
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError(""); setMessage("");
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError(""); setMessage("");
     try {
       let result: Result;
       if (state === "login") result = await request("login", { email, password });
@@ -98,24 +102,30 @@ function App() {
     location.assign(`${location.protocol}//${host}${location.port ? `:${location.port}` : ""}/`);
   }
 
-  return <main className="page"><section className="panel" aria-labelledby="title">
+  function toggleTheme() {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    setCurrentTheme(next);
+  }
+
+  return <main className="page"><div className="theme-control"><Button variant="tertiary" onClick={toggleTheme}>Use {theme === 'light' ? 'dark' : 'light'} mode</Button></div><section className="panel" aria-labelledby="title">
     <p className="brand">Event Check-in</p><h1 id="title">{titles[state]}</h1>
     {state === "login" && <p className="intro">Use your staff credentials for this organization.</p>}
     {state === "enroll" && <p className="intro">Add the setup key to an authenticator, then enter its six-digit code.</p>}
-    {error && <p role="alert" className="notice error">{error}</p>}
-    {message && <p role="status" className="notice">{message}</p>}
+    {error && <Status tone="danger" title="Could not continue" instruction={error} announce="assertive" />}
+    {message && <Status tone="info" title="Update" instruction={message} announce="polite" />}
     {state === "session" ? <div className="stack">
-      {codes.length > 0 && <div><h2>Save recovery codes</h2><p>Each code works once. Store them safely.</p><pre>{codes.join("\n")}</pre></div>}
-      <button className="secondary" onClick={logout} disabled={busy}>Sign out</button>
-      <div className="tenant-switch"><label>Another organization’s domain<input type="text" inputMode="url" autoComplete="off" value={tenantHost} onChange={(e) => setTenantHost(e.target.value)} /></label><button className="secondary" type="button" onClick={switchTenant}>Open organization</button></div>
+      {codes.length > 0 && <div><h2>Save recovery codes</h2><p>Each code works once. Store them safely.</p><pre className="recovery-codes">{codes.join("\n")}</pre></div>}
+      <Button variant="secondary" onClick={logout} loading={busy} loadingText="Signing out…">Sign out</Button>
+      <div className="tenant-switch"><Field label="Another organization’s domain" type="text" inputMode="url" autoComplete="off" value={tenantHost} onChange={(e) => setTenantHost(e.target.value)} /><Button variant="secondary" onClick={switchTenant}>Open organization</Button></div>
     </div> : <form onSubmit={submit} className="stack">
-      {(state === "login" || state === "recover") && <label>Email address<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>}
-      {(state === "login" || state === "invite" || state === "reset") && <label>Password<input type="password" autoComplete={state === "login" ? "current-password" : "new-password"} required minLength={state === "login" ? undefined : 12} maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} /></label>}
-      {state === "enroll" && <><button className="secondary" type="button" onClick={enroll} disabled={busy}>Generate setup key</button>{secret && <p className="key">Setup key: <code>{secret}</code></p>}</>}
-      {(state === "mfa" || state === "enroll") && <><label>{recovery ? "Recovery code" : "Six-digit code"}<input inputMode={recovery ? "text" : "numeric"} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /></label>{state === "mfa" && <button className="text-button" type="button" onClick={() => setRecovery(!recovery)}>{recovery ? "Use authenticator code" : "Use a recovery code"}</button>}</>}
-      <button type="submit" disabled={busy || (state === "enroll" && !secret)}>{busy ? "Working…" : state === "login" ? "Sign in" : state === "recover" ? "Send reset link" : state === "invite" ? "Accept invitation" : state === "reset" ? "Update password" : "Verify code"}</button>
-      {state === "login" && <button type="button" className="text-button" onClick={() => setState("recover")}>Forgot password?</button>}
-      {state === "recover" && <button type="button" className="text-button" onClick={() => setState("login")}>Back to sign in</button>}
+      {(state === "login" || state === "recover") && <Field label="Email address" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />}
+      {(state === "login" || state === "invite" || state === "reset") && <Field label="Password" type="password" autoComplete={state === "login" ? "current-password" : "new-password"} required minLength={state === "login" ? undefined : 12} maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} />}
+      {state === "enroll" && <><Button variant="secondary" onClick={enroll} loading={busy} loadingText="Generating setup key…">Generate setup key</Button>{secret && <p className="key">Setup key: <code>{secret}</code></p>}</>}
+      {(state === "mfa" || state === "enroll") && <><Field label={recovery ? "Recovery code" : "Six-digit code"} inputMode={recovery ? "text" : "numeric"} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />{state === "mfa" && <Button variant="tertiary" onClick={() => setRecovery(!recovery)}>{recovery ? "Use authenticator code" : "Use a recovery code"}</Button>}</>}
+      <Button type="submit" loading={busy} loadingText="Working…" disabled={state === "enroll" && !secret}>{state === "login" ? "Sign in" : state === "recover" ? "Send reset link" : state === "invite" ? "Accept invitation" : state === "reset" ? "Update password" : "Verify code"}</Button>
+      {state === "login" && <Button variant="tertiary" onClick={() => setState("recover")}>Forgot password?</Button>}
+      {state === "recover" && <Button variant="tertiary" onClick={() => setState("login")}>Back to sign in</Button>}
     </form>}
     <p className="footnote">To use another organization, open its verified domain and sign in there.</p>
   </section></main>;

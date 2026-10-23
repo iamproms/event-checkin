@@ -1,6 +1,6 @@
 # Event Check-in Platform
 
-M1-01 foundation, M1-02 tenant schema, M1-03 staff authentication, and M1-04 reliable-job/private-file primitives are in this branch. The API is FastAPI; the web workspace is React, TypeScript and Vite. Approved decisions D-01–D-13, [G-02](docs/DECISIONS/G-02_STAFF_IDENTITY.md), and the [M1-04 decision record](docs/DECISIONS/M1-04_JOBS_FILES.md) govern this work.
+M1-01 foundation, M1-02 tenant schema, M1-03 staff authentication, and M1-04 reliable-job/private-file primitives are merged. M1-05 shared UI primitives are in progress on this branch. The API is FastAPI; the web workspace is React, TypeScript and Vite. Approved decisions D-01–D-13, [G-02](docs/DECISIONS/G-02_STAFF_IDENTITY.md), [G-07](docs/DECISIONS/G-07_VISUAL_FOUNDATION.md), and the [M1-04 decision record](docs/DECISIONS/M1-04_JOBS_FILES.md) govern this work.
 
 M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file routes. Event, QR, billing, and scanner features remain outside this milestone.
 
@@ -62,7 +62,12 @@ cd ../frontend
 npm run lint
 npm run typecheck
 npm run build
+npm run test:tokens
+npx playwright install chromium
+npm run test:ui
 ```
+
+The isolated M1-05 component examples are at `http://127.0.0.1:5173/ui-lab.html` in Vite development mode. They are not application screens or a production entry. See the [component contracts](frontend/src/ui/README.md) and [state vocabulary v1](docs/DECISIONS/M0-02_STATE_VOCABULARY_V1.md).
 
 `/health` is a process liveness check. `/ready` checks database connectivity and returns HTTP 503 when it fails. Its `worker` field remains `not_configured`: M1-04 worker/queue health is inspected through the restricted [jobs runbook](docs/M1-04_JOBS_STORAGE_RUNBOOK.md), and Redis availability does not gate API readiness or future authoritative scan writes. No raw database exception or URL is returned by either endpoint.
 

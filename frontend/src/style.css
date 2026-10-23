@@ -1,31 +1,36 @@
-@font-face { font-family: Inter; src: url('/fonts/InterVar.woff2') format('woff2'); font-weight: 400 600; font-style: normal; font-display: swap; }
-:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #1d2621; background: #f8f7f4; font-synthesis: none; }
+@import './ui/tokens.css';
+@import './ui/primitives.css';
+
 * { box-sizing: border-box; }
-body { margin: 0; }
+html { background: var(--canvas); color: var(--text); }
+body { margin: 0; min-width: 0; font: var(--type-body); }
 button, input { font: inherit; }
-.page { min-height: 100dvh; display: grid; place-items: center; padding: 32px 20px; }
-.panel { width: min(100%, 420px); }
-.brand { font-size: 14px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 56px; }
-h1 { font-size: 30px; line-height: 1.16; letter-spacing: -.035em; font-weight: 600; margin: 0 0 12px; }
-h2 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
-.intro, .footnote { color: #657068; line-height: 1.55; margin: 0 0 28px; }
-.footnote { font-size: 13px; margin: 40px 0 0; }
-.stack { display: grid; gap: 18px; }
-.tenant-switch { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid #d9ddd7; }
-label { display: grid; gap: 8px; font-size: 14px; font-weight: 500; }
-input { height: 44px; border: 1px solid #c9cec9; border-radius: 4px; background: #fff; color: #1d2621; padding: 0 12px; width: 100%; }
-input:hover { border-color: #969f98; }
-input:focus-visible, button:focus-visible { outline: 2px solid #225c49; outline-offset: 3px; }
-button { min-height: 44px; border-radius: 4px; border: 1px solid #174d3b; padding: 9px 16px; background: #174d3b; color: #fff; font-weight: 600; cursor: pointer; }
-button:hover { background: #123d30; }
-button:active { transform: translateY(1px); }
-button:disabled { cursor: wait; opacity: .58; }
-button.secondary { color: #1d2621; background: #fff; border-color: #c9cec9; }
-button.secondary:hover { background: #f1f3f0; }
-button.text-button { justify-self: start; min-height: 24px; border: 0; padding: 0; background: transparent; color: #225c49; font-weight: 500; }
-button.text-button:hover { text-decoration: underline; }
-.notice { border: 1px solid #a1b8ab; border-radius: 4px; color: #174d3b; padding: 12px; line-height: 1.45; }
-.notice.error { border-color: #d2a8a3; color: #9a3129; }
-.key, pre { overflow-wrap: anywhere; border: 1px solid #d9ddd7; border-radius: 4px; background: #fff; padding: 12px; white-space: pre-wrap; }
-@media (prefers-color-scheme: dark) { :root { color: #eef1ec; background: #181d1a; } .intro, .footnote { color: #aeb8ae; } input, button.secondary, .key, pre { background: #222923; color: #eef1ec; border-color: #465248; } button.secondary:hover { background: #2d362e; } .notice { color: #9ed0b4; } .notice.error { color: #f1aaa2; } }
-@media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
+
+.page { min-height: 100dvh; display: grid; place-items: center; padding: var(--space-8) var(--space-4); }
+.panel { width: min(100%, 420px); min-width: 0; }
+.brand { margin: 0 0 var(--space-12); font: 600 .875rem/1.25rem var(--font-body); letter-spacing: -.01em; }
+.panel h1 { margin: 0 0 var(--space-3); font: var(--type-page); letter-spacing: -.035em; }
+.panel h2 { margin: 0 0 var(--space-2); font: var(--type-component); }
+.intro, .footnote { margin: 0 0 var(--space-8); color: var(--text-muted); font: var(--type-support); }
+.footnote { margin: var(--space-8) 0 0; font: var(--type-caption); }
+.panel > .ui-status { margin-bottom: var(--space-4); }
+.stack { display: grid; gap: var(--space-4); min-width: 0; }
+.stack > .ui-button--primary, .stack > .ui-button--secondary { width: 100%; }
+.tenant-switch { display: grid; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border-subtle); }
+.key, .recovery-codes {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.theme-control { position: absolute; top: var(--space-4); right: var(--space-4); }
+
+@media (max-width: 360px) {
+  .page { padding-inline: var(--space-3); }
+  .brand { margin-bottom: var(--space-8); }
+  .panel h1 { font: var(--type-subsection); }
+  .theme-control { position: static; display: flex; justify-content: end; width: 100%; margin-bottom: var(--space-4); }
+}

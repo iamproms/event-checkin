@@ -1,8 +1,8 @@
 # Event Check-in Platform — Implementation Plan
 
-**Status:** Step 4 planning proposal; no feature implementation has begun.  
+**Status:** Living roadmap; the M1-01 baseline and M1-02–M1-04 changes are merged, with M1-01 production/staging hardening still open. M1-05 is in progress.
 **Inputs:** [PRD review](PRD_REVIEW.md), [technical design](TECHNICAL_DESIGN.md), [database design](DATABASE_DESIGN.md), and the [Quiet Precision design-system study](DESIGN_SYSTEM.md).  
-**Decision baseline:** D-01–D-13 in the PRD review. Quiet Precision is the working visual foundation for planning; exact aesthetic tokens remain subject to visual approval.  
+**Decision baseline:** D-01–D-13 in the PRD review. The Quiet Precision foundation is approved by [G-07](DECISIONS/G-07_VISUAL_FOUNDATION.md); the initial [M0-02 state vocabulary v1](DECISIONS/M0-02_STATE_VOCABULARY_V1.md) covers only documented states. Feature-level states and tenant branding bounds remain open.
 **Planning unit:** Each task is independently reviewable and should be small enough for one pull request or a clearly identified short series of dependent pull requests. No dates or staffing estimates are asserted without team capacity and vendor lead-time information.
 
 ## 1. Delivery rules and scope
@@ -27,7 +27,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 | G-04 Communications | Transactional/promotional purposes, consent/opt-out language, sender verification, SMS/WhatsApp provider and approved templates | M3-02, M5-01/04/05 | Messaging policy and vendor onboarding record |
 | G-05 Commercial | Paystack plan prices, interval, trials, included usage, add-ons, tax, renewal/nonpayment policy | M2-02, M5-04/05 where channel charges apply, M6-03 | Plan catalog and entitlement state table |
 | G-06 Privacy and vendors | Region/cross-border processing, export artifact lifetime, deletion execution timing, suppression-retention basis, aggregate privacy threshold, backup expiry | M1-01, M2-01, M5-02/03/04/05, M6-02 | Data-lifecycle and vendor decision record |
-| G-07 Visual foundation | Final font, tokens, supported theme behavior, brand override range, navigation treatment, density/radius defaults after browser/device review | M1-05 and all production UI acceptance | Approved design-system revision |
+| G-07 Visual foundation | Approved Inter, warm-neutral, explicit light/dark, evergreen, comfortable/limited compact, 4/8 radius, neutral-fill navigation. Tenant brand bounds and feature layouts remain in their owning milestones. | M1-05 foundation is authorized; production branding still requires contrast review. | [Approved G-07 record](DECISIONS/G-07_VISUAL_FOUNDATION.md) |
 
 **Working assumptions pending approval:** never interrupt a live scan because billing status changes; scanner shows result without attendee identity; admin-requested deletion is irreversible once executed; public duplicate-registration responses avoid account enumeration. These are proposals already identified in the design documents, not new approvals. A task may prepare interfaces and adapters while its gate remains open, but cannot claim production-ready behavior that depends on it.
 
