@@ -69,13 +69,13 @@ def auth_db() -> Iterator[AuthDatabase]:
         _migrate(url, "0002_tenant_foundation")
         _migrate(url, "head")
         _migrate(fresh_url, "head")
-        _migrate(url, "0002_tenant_foundation")
+        _migrate(url, "0002_tenant_foundation", direction="downgrade")
         _migrate(url, "head")
         owner = create_engine(url)
         with owner.connect() as conn:
             assert (
                 conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0004_auth_session_invalidation"
+                == "0005_reliable_jobs_storage"
             )
             for table in ("staff_invitations", "event_assignments"):
                 state = conn.execute(

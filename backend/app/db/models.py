@@ -550,3 +550,148 @@ class AuthRateLimit(Base):
     window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (CheckConstraint("attempts >= 0", name="ck_auth_rate_limits_attempts"),)
+
+
+class JobRecord(Base):
+    __tablename__ = "job_records"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("tenants.id"))
+    event_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="5")
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    notification_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    lease_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id"],
+            ["events.tenant_id", "events.id"],
+            name="fk_job_records_event",
+        ),
+        UniqueConstraint("tenant_id", "id", name="uq_job_records_tenant_id"),
+        UniqueConstraint(
+            "tenant_id", "job_type", "idempotency_key", name="uq_job_records_idempotency"
+        ),
+        CheckConstraint(
+            "status IN ('pending','running','succeeded','retry_wait','dead')",
+            name="ck_job_records_status",
+        ),
+        CheckConstraint("attempts >= 0 AND max_attempts BETWEEN 1 AND 20", name="ck_job_attempts"),
+        CheckConstraint("progress BETWEEN 0 AND 100", name="ck_job_progress"),
+        CheckConstraint(
+            "(status = 'running') = (lease_token IS NOT NULL AND lease_until IS NOT NULL)",
+            name="ck_job_running_lease",
+        ),
+        Index("ix_job_records_due", "status", "next_attempt_at", "created_at"),
+        Index("ix_job_records_tenant_status", "tenant_id", "status", "created_at"),
+    )
+
+
+class OutboxEvent(Base):
+    __tablename__ = "outbox_events"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    lease_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(64))
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "job_id"],
+            ["job_records.tenant_id", "job_records.id"],
+            name="fk_outbox_job",
+        ),
+        UniqueConstraint("job_id", name="uq_outbox_job"),
+        CheckConstraint("attempts >= 0", name="ck_outbox_attempts"),
+        CheckConstraint("(lease_token IS NULL) = (lease_until IS NULL)", name="ck_outbox_lease"),
+        Index(
+            "ix_outbox_unpublished",
+            "next_attempt_at",
+            "created_at",
+            postgresql_where=text("published_at IS NULL"),
+        ),
+        Index("ix_outbox_tenant", "tenant_id", "created_at"),
+    )
+
+
+class PrivateObject(Base):
+    __tablename__ = "private_objects"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("tenants.id"))
+    event_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    purpose: Mapped[str] = mapped_column(String(48), nullable=False)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    max_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    actual_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id"],
+            ["events.tenant_id", "events.id"],
+            name="fk_private_objects_event",
+        ),
+        UniqueConstraint("tenant_id", "id", name="uq_private_objects_tenant_id"),
+        UniqueConstraint("object_key", name="uq_private_objects_key"),
+        CheckConstraint(
+            "status IN ('pending','available','delete_pending','deleted')",
+            name="ck_private_objects_status",
+        ),
+        CheckConstraint(
+            "max_size_bytes > 0 AND (actual_size_bytes IS NULL OR "
+            "actual_size_bytes BETWEEN 0 AND max_size_bytes)",
+            name="ck_private_objects_size",
+        ),
+        CheckConstraint("expires_at > created_at", name="ck_private_objects_expiry"),
+        CheckConstraint(
+            "purpose <> 'internal_test_artifact' OR "
+            "(max_size_bytes <= 5242880 AND mime_type IN ('text/plain','application/pdf') "
+            "AND expires_at <= created_at + interval '24 hours')",
+            name="ck_private_objects_test_policy",
+        ),
+        Index(
+            "ix_private_objects_expiring",
+            "expires_at",
+            postgresql_where=text("status <> 'deleted'"),
+        ),
+        Index("ix_private_objects_tenant", "tenant_id", "event_id", "status"),
+    )

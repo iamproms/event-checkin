@@ -15,9 +15,33 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eventcheckin_identity_app') THEN
     CREATE ROLE eventcheckin_identity_app LOGIN PASSWORD 'local_identity_only' NOBYPASSRLS;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eventcheckin_jobs') THEN
+    CREATE ROLE eventcheckin_jobs NOLOGIN NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eventcheckin_jobs_app') THEN
+    CREATE ROLE eventcheckin_jobs_app LOGIN PASSWORD 'local_jobs_only' NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eventcheckin_dispatcher') THEN
+    CREATE ROLE eventcheckin_dispatcher NOLOGIN NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eventcheckin_dispatcher_app') THEN
+    CREATE ROLE eventcheckin_dispatcher_app LOGIN PASSWORD 'local_dispatcher_only' NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eventcheckin_job_operator') THEN
+    CREATE ROLE eventcheckin_job_operator NOLOGIN NOBYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eventcheckin_job_operator_app') THEN
+    CREATE ROLE eventcheckin_job_operator_app LOGIN PASSWORD 'local_operator_only' NOBYPASSRLS;
+  END IF;
 END $$;
 GRANT eventcheckin_runtime TO eventcheckin_app;
 GRANT eventcheckin_identity TO eventcheckin_identity_app;
+GRANT eventcheckin_jobs TO eventcheckin_jobs_app;
+GRANT eventcheckin_dispatcher TO eventcheckin_dispatcher_app;
+GRANT eventcheckin_job_operator TO eventcheckin_job_operator_app;
 GRANT eventcheckin_domain_resolver TO eventcheckin;
 GRANT CONNECT ON DATABASE eventcheckin TO eventcheckin_app;
 GRANT CONNECT ON DATABASE eventcheckin TO eventcheckin_identity_app;
+GRANT CONNECT ON DATABASE eventcheckin TO eventcheckin_jobs_app;
+GRANT CONNECT ON DATABASE eventcheckin TO eventcheckin_dispatcher_app;
+GRANT CONNECT ON DATABASE eventcheckin TO eventcheckin_job_operator_app;
