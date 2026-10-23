@@ -39,10 +39,12 @@ class DatabaseHarness:
     forbidden_database_url: str
 
 
-def _migrate(url: str, revision: str) -> None:
+def _migrate(url: str, revision: str, direction: str = "upgrade") -> None:
+    if direction not in {"upgrade", "downgrade"}:
+        raise ValueError("Invalid migration direction")
     env = {**os.environ, "APP_ENV": "test", "DATABASE_URL": url}
     subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", revision],
+        [sys.executable, "-m", "alembic", direction, revision],
         cwd=BACKEND_DIR,
         env=env,
         check=True,

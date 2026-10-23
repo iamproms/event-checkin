@@ -93,7 +93,10 @@ erDiagram
 | `provider_webhook_events` | `id uuid PK`, `provider text`, `external_event_id text`, `received_at`, `processed_at?`, `status`, `payload_digest bytea` | Unique `(provider,external_event_id)`; retain minimum safe metadata; do not keep unbounded full webhook bodies. |
 | `audit_events` | `id uuid PK`, `tenant_id uuid?`, `actor_user_id uuid?`, `action text`, `resource_type`, `resource_id uuid?`, `request_id uuid`, `occurred_at`, `metadata jsonb` | Append-only application policy; redact personal values and QR contents. Participant-linked metadata is removed/anonymized by purge. Separate security-retention policy needed for account activity. |
 | `outbox_events` | `id uuid PK`, `tenant_id uuid?`, `aggregate_type`, `aggregate_id uuid`, `event_type`, `payload jsonb`, `created_at`, `published_at?`, `attempts int` | Inserted in the same transaction as source data. Payload contains IDs/minimal metadata, not participant PII; short retention after publish. |
+
 | `privacy_jobs` | `id uuid PK`, `tenant_id uuid`, `event_id uuid`, `scope enum`, `requested_by uuid?`, `status enum`, `requested_at`, `completed_at?`, `error_code text?` | Audit of event/person export or deletion. Do not preserve identifiers in job metadata beyond permitted retention. |
+
+**M1-04 implemented subset:** Revision `0005_reliable_jobs_storage` creates tenant-owned `job_records`, `outbox_events`, and `private_objects` with FORCE RLS. The M1-04 outbox carries a composite tenant/job reference and event type; arbitrary aggregate payloads and the consumer contracts for future scan/dashboard events remain deferred to their owning milestones. Job state is `pending/running/succeeded/retry_wait/dead` per the [approved M1-04 record](DECISIONS/M1-04_JOBS_FILES.md). Internal test objects only are activated; production file purposes are deferred. See the [runbook](M1-04_JOBS_STORAGE_RUNBOOK.md).
 
 ### Anonymous aggregates retained after purge
 

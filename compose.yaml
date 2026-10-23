@@ -54,6 +54,85 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  object-storage:
+    image: rustfs/rustfs:1.0.1
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: local_object_key
+      RUSTFS_SECRET_KEY: local_object_secret_only
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - object_data_rustfs:/data
+  object-storage-init:
+    build: ./backend
+    command: ["python", "-m", "app.worker.storage_bootstrap"]
+    environment:
+      APP_ENV: local
+      STORAGE_ENDPOINT_URL: http://object-storage:9000
+      STORAGE_BUCKET: eventcheckin-private
+      STORAGE_ACCESS_KEY: local_object_key
+      STORAGE_SECRET_KEY: local_object_secret_only
+    depends_on:
+      - object-storage
+  worker:
+    build: ./backend
+    command: ["celery", "-A", "app.worker.celery_app:celery_app", "worker", "--loglevel=INFO"]
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
+      JOBS_DATABASE_URL: postgresql+psycopg://eventcheckin_jobs_app:local_jobs_only@db:5432/eventcheckin
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      role-setup:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+  dispatcher:
+    build: ./backend
+    command: ["python", "-m", "app.worker.dispatcher"]
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
+      DISPATCHER_DATABASE_URL: postgresql+psycopg://eventcheckin_dispatcher_app:local_dispatcher_only@db:5432/eventcheckin
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      role-setup:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+  storage-maintenance:
+    build: ./backend
+    command: ["python", "-m", "app.worker.storage_maintenance"]
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
+      JOBS_OPERATOR_DATABASE_URL: postgresql+psycopg://eventcheckin_job_operator_app:local_operator_only@db:5432/eventcheckin
+      STORAGE_ENDPOINT_URL: http://object-storage:9000
+      STORAGE_BUCKET: eventcheckin-private
+      STORAGE_ACCESS_KEY: local_object_key
+      STORAGE_SECRET_KEY: local_object_secret_only
+    depends_on:
+      role-setup:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
   mailpit:
     image: axllent/mailpit:v1.31.5
     ports:
@@ -69,4 +148,7 @@ services:
       - api
 volumes:
   postgres_data:
+  redis_data:
+  object_data:
+  object_data_rustfs:
 
