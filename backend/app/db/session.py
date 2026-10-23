@@ -40,9 +40,9 @@ def tenant_session_for_domain(engine: Engine, trusted_hostname: str) -> Iterator
     """
     hostname = normalize_hostname(trusted_hostname)
     with Session(engine) as session, session.begin():
-        tenant_id = session.execute(
+        tenant_id: UUID | None = session.execute(
             text("SELECT resolve_active_tenant_domain(:hostname)"), {"hostname": hostname}
-        ).scalar_one()
+        ).scalar_one_or_none()
         if not isinstance(tenant_id, UUID):
             raise TenantResolutionError("Unrecognized tenant domain")
         session.execute(

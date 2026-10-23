@@ -3,6 +3,7 @@
 import os
 import secrets
 import subprocess
+import sys
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -40,7 +41,12 @@ class DatabaseHarness:
 
 def _migrate(url: str, revision: str) -> None:
     env = {**os.environ, "APP_ENV": "test", "DATABASE_URL": url}
-    subprocess.run(["alembic", "upgrade", revision], cwd=BACKEND_DIR, env=env, check=True)
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", revision],
+        cwd=BACKEND_DIR,
+        env=env,
+        check=True,
+    )
 
 
 def _seed(owner: Engine) -> tuple[UUID, UUID, UUID, UUID, UUID, UUID, UUID]:
