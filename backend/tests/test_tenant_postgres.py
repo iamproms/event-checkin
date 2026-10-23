@@ -74,11 +74,12 @@ def _seed(owner: Engine) -> tuple[UUID, UUID, UUID, UUID, UUID, UUID, UUID]:
             conn.execute(
                 text("""INSERT INTO events
               (id,tenant_id,slug,name,starts_at,ends_at,timezone,status,pii_purge_due_at)
-              VALUES (:id,:tenant,:slug,:slug,:starts,:ends,'Africa/Lagos','draft',:purge)"""),
+              VALUES (:id,:tenant,:slug,:name,:starts,:ends,'Africa/Lagos','draft',:purge)"""),
                 {
                     "id": event,
                     "tenant": tenant,
                     "slug": slug,
+                    "name": slug.replace("-", " ").title(),
                     "starts": now,
                     "ends": now + timedelta(hours=4),
                     "purge": now + timedelta(days=90, hours=4),
