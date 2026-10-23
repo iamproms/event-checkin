@@ -1,0 +1,15 @@
+.examples { max-width: 900px; margin: 0 auto; padding: var(--space-8) var(--space-4) var(--space-16); }
+.examples__header { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); }
+.examples h1 { min-width: 0; margin: 0; font: var(--type-page); overflow-wrap: anywhere; }
+.examples h2 { margin: 0 0 var(--space-4); font: var(--type-section); }
+.examples section { margin-top: var(--section-gap); padding-top: var(--space-6); border-top: 1px solid var(--border-subtle); }
+.examples__settings, .examples__row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2); }
+.examples__body { margin: 0 0 var(--space-3); font: var(--type-body); overflow-wrap: anywhere; }
+.examples__support { margin: 0; color: var(--text-muted); font: var(--type-support); }
+.examples__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-4); }
+.examples__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.examples__nav { width: min(100%, 280px); display: grid; gap: var(--space-1); }
+@media (max-width: 620px) {
+  .examples__header { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .examples__fields, .examples__grid { grid-template-columns: minmax(0, 1fr); }
+}

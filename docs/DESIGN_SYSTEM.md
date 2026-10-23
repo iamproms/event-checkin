@@ -1,9 +1,11 @@
 # Event Check-in Platform — Design System
 
-**Status:** Provisional foundation study; requires product owner approval before any aesthetic token becomes normative.  
+**Status:** G-07 Quiet Precision foundation approved 2026-10-23; feature-level compositions and tenant brand bounds remain open.
 **Working direction:** Quiet Precision.  
 **Inputs:** PRD v1.0; [PRD review](PRD_REVIEW.md) and approved decisions D-01–D-13; [technical design](TECHNICAL_DESIGN.md); supplied wireframes; Taste Skill app guidance; Emil Kowalski design engineering guidance.  
 **Visual companion:** [design foundations laboratory](design-system-preview.html). This iteration contains isolated specimens only; no application layouts or finished brand are proposed.
+
+**Decision record:** [G-07 visual foundation](DECISIONS/G-07_VISUAL_FOUNDATION.md). Candidate comparisons below preserve the earlier design study. G-07 selects Inter, warm neutrals, light default with explicit locally persisted dark mode, deep evergreen, comfortable density, 4/8px radii, and neutral-fill navigation. The documented typography, spacing, semantic-color separation, floating elevation, and reduced-motion rules are the M1-05 baseline. Alternative laboratory choices are historical specimens, not runtime options. [M0-02 state vocabulary v1](DECISIONS/M0-02_STATE_VOCABULARY_V1.md) governs feature adapters rather than visual primitives.
 
 ## 1. Direction and status
 
@@ -27,9 +29,9 @@ Quiet Precision combines precise hierarchy and useful density, clarity in contro
 
 This audit applies the Taste Skill's app principles of quiet borders, restrained color in chrome, flat surfaces, honest status and dense substance. Emil's guidance favors purpose-specific motion, fast frequent actions, pointer-aware hover, and explicit focus/pressed behavior. Neither skill substitutes for checking real venue devices and accessibility during implementation.
 
-## 2. Provisional foundation candidates
+## 2. Foundation values and historical candidates
 
-The laboratory has independent controls for each dimension. It opens on the current **recommendation to investigate**: Inter, warm neutral, light, deep evergreen, comfortable, precise 4/8 radii, and neutral-fill navigation. No combination is approved yet. Values are design hypotheses for comparison, not implementation requirements.
+The laboratory retains independent controls for historical comparison. G-07 approves its Inter, warm-neutral, light, deep-evergreen, comfortable, precise 4/8, neutral-fill combination. Other combinations remain design-study examples. Tenant-selected accents require separate validation and approval before use.
 
 ### Typography
 
@@ -38,7 +40,7 @@ The laboratory has independent controls for each dimension. It opens on the curr
 | Inter | Familiar, open forms and reliable reading in dense data and forms | May feel generic unless hierarchy and spacing are carefully resolved. |
 | Geist | Tighter, crisp character that may suit concise navigation and status | The bundled Geist preview file covers Latin characters only; check Nigerian names, diacritics, numerals, and international text with the intended production font package and fallback. |
 
-Use **one** primary sans family after approval. Both specimens use self-hosted font files and weights 400, 500, 600 only. The HTML reports whether the browser's FontFaceSet loaded each asset. If loading fails, the preview falls back to Arial/sans-serif; file presence alone does not prove visual rendering. Font metadata confirms the bundled Inter asset includes `Ọ`, `ẹ`, and `₦`, while the bundled Geist Latin asset lacks them; the latter will use the browser fallback for those glyphs. Production font packaging and broader script coverage remain open.
+Production UI uses self-hosted **Inter** at weights 400, 500, and 600 with a system sans-serif fallback. The historical HTML compares both Inter and Geist and reports browser font-load status. Font metadata confirms the bundled Inter asset includes `Ọ`, `ẹ`, and `₦`; broader script coverage still needs testing in the target browsers.
 
 | Type token | Size / line height | Weight | Intended use |
 |---|---:|---:|---|
@@ -58,6 +60,8 @@ Use tabular numerals for live counts and financial values, with explicit `₦` a
 
 The preview compares **warm neutral** and **neutral gray** foundations in both light and dark modes. The former makes large quiet surfaces slightly softer; the latter is more austere. Both use a single modest surface step. Candidate accents are **deep evergreen**, **slate blue**, and **graphite**. Accent is for the primary action, link, selected control, and limited key data emphasis. It is not a substitute for semantic success/warning/error colors.
 
+Production UI uses the **warm-neutral** and **deep-evergreen** columns. Light is the first-visit default; a visible user action selects dark or light, and the choice persists in same-origin local storage. OS color preference alone does not change the selected theme. Both themes must be tested with the same content and interaction states. Future tenant branding may change only approved action branding after contrast validation; it cannot alter semantic status, focus, critical scan outcomes, or accessibility rules.
+
 | Role | Warm light | Neutral light | Warm dark | Neutral dark |
 |---|---|---|---|---|
 | Canvas | `#F7F6F3` | `#F7F8FA` | `#171816` | `#15171A` |
@@ -76,7 +80,7 @@ The preview compares **warm neutral** and **neutral gray** foundations in both l
 
 Use white text on light accent fills and `#111817` on dark accent fills in the specimen. Quiet selected surfaces remain neutral so accent is not spread through every row. Visible focus uses a solid outline with offset. The preview's programmatic contrast table reports the selected combination, but the full light/dark, neutral/accent matrix and later tenant overrides still require review on rendered UI.
 
-**Semantic colors are independent of the accent.** Provisional status pairs: light success `#2C6532` on `#EBF5E9`; warning `#714B0B` on `#FCF2DC`; danger `#8D2630` on `#FCEBED`; information `#334E68` on `#EAF1F7`. Dark success `#D8F1D0` on `#283B28`; warning `#FFE8BB` on `#473516`; danger `#FFDADF` on `#4B252B`; information `#D8EAF8` on `#273B4D`. Success is greener than the evergreen action accent, uses a pale/opaque status field rather than a solid action fill, and always says what happened. The distinction is semantic and structural as well as chromatic; color alone never carries the decision. The same status roles serve scanner results and other critical feedback. Tenant accents never recolor them.
+**Semantic colors are independent of the accent.** M1-05 baseline status pairs: light success `#2C6532` on `#EBF5E9`; warning `#714B0B` on `#FCF2DC`; danger `#8D2630` on `#FCEBED`; information `#334E68` on `#EAF1F7`. Dark success `#D8F1D0` on `#283B28`; warning `#FFE8BB` on `#473516`; danger `#FFDADF` on `#4B252B`; information `#D8EAF8` on `#273B4D`. Measured text/background ratios range from 6.23:1 to 10.22:1 across these pairs. Success is greener than the evergreen action accent, uses a pale/opaque status field rather than a solid action fill, and always says what happened. The distinction is semantic and structural as well as chromatic; color alone never carries the decision. The same status roles serve scanner results and other critical feedback. Tenant accents never recolor them.
 
 ### Spacing, shape, density
 
@@ -143,13 +147,15 @@ Use visible keyboard focus, semantic headings, persistent labels, associated err
 
 Emil's interaction guidance applies by task frequency: frequent scanner and keyboard feedback is immediate; any later overlay motion needs a specific purpose, property, duration, interruption path, and reduced-motion behavior. Hover styling is only for fine pointers. The foundation laboratory has only the documented pointer-press transition; token switching is instant.
 
-## 5. Approval questions and review evidence
+## 5. Remaining decisions and review evidence
 
-**Foundation decisions requiring approval:** primary family (Inter/Geist); neutral foundation (warm/gray); default light/dark behavior; accent (evergreen/slate/graphite); default density and where compact is allowed; radius pair; selected-navigation treatment; exact semantic palette; white-label accent bounds and platform attribution. Product decisions still open elsewhere include browser/device support matrix, venue connectivity escalation wording, aggregate privacy threshold, campaign consent language, and subscription plan terms. This document does not silently settle them.
+**Foundation approved by G-07:** Inter, warm neutral, explicit light/dark with light default, evergreen, comfortable with limited compact admin use, 4/8 radii, neutral-fill navigation, documented scale, semantic separation, and restrained elevation/motion. **Still open:** tenant accent bounds and platform attribution, screen compositions, browser/device support matrix, venue connectivity escalation wording, aggregate privacy threshold, campaign consent language, and subscription plan terms. This document does not silently settle them.
 
 **Review criteria:** compare the same specimen content at 100% and 200% zoom; try keyboard controls and both themes; inspect long names, numbers, error text, and status distinction; compare accents in light and dark with both neutral foundations. The HTML has only isolated specimens. Its controls are a review aid, not a runtime design-system implementation.
 
-**Evidence and limits:** local font files are bundled with [Inter](assets/fonts/INTER-OFL.txt) and [Geist](assets/fonts/GEIST-OFL.txt) license copies and identified by font metadata. The preview checks browser font-load status at runtime. Contrast calculations were corrected to parse hex tokens. Calculated ratios across the tested light/dark palette include primary text/canvas 14.67–16.58:1, secondary text/surface 6.38–9.63:1, action text/fill 7.06–11.59:1, revised semantic text/surface 6.23–10.22:1, destructive text/fill 8.56–13.78:1, and control boundary/surface 3.95–5.60:1. Hairline separators are quieter and cannot carry essential meaning. Static inspection found local assets, unique IDs, associated form labels, balanced CSS braces, and valid embedded JavaScript. A DOM interaction check switched all **96** font/neutral/theme/accent/density/radius combinations; each selector retained its `aria-pressed` state and every contrast readout remained numeric. This DOM check does not render pixels or load fonts. The current sandbox exposes no browser tab and blocks headless Chrome, Firefox and Playwright Chromium, so no screenshot or actual browser font-rendering claim is possible from this run. Final typography fit, anti-aliasing, 320px and 200% zoom reflow, focus appearance, keyboard operation, and assistive-technology behavior require rendered browser/device review. Every tenant-selected palette must be validated before publication. This document remains provisional until the foundation is approved.
+**Evidence and limits:** local font files are bundled with [Inter](assets/fonts/INTER-OFL.txt) and [Geist](assets/fonts/GEIST-OFL.txt) license copies and identified by font metadata. The preview checks browser font-load status at runtime. Contrast calculations were corrected to parse hex tokens. Calculated ratios across the tested light/dark palette include primary text/canvas 14.67–16.58:1, secondary text/surface 6.38–9.63:1, action text/fill 7.06–11.59:1, revised semantic text/surface 6.23–10.22:1, destructive text/fill 8.56–13.78:1, and control boundary/surface 3.95–5.60:1. Hairline separators are quieter and cannot carry essential meaning. Static inspection found local assets, unique IDs, associated form labels, balanced CSS braces, and valid embedded JavaScript. A DOM interaction check switched all **96** font/neutral/theme/accent/density/radius combinations; each selector retained its `aria-pressed` state and every contrast readout remained numeric. This DOM check does not render pixels or load fonts. The current sandbox exposes no browser tab and blocks headless Chrome, Firefox and Playwright Chromium, so no screenshot or actual browser font-rendering claim is possible from this run. Final typography fit, anti-aliasing, 320px and 200% zoom reflow, focus appearance, keyboard operation, and assistive-technology behavior require rendered browser/device review. Every tenant-selected palette must be validated before publication. This historical laboratory evidence does not replace rendered M1-05 production validation.
+
+**M1-05 implementation evidence:** The Fedora Chromium suite passed 10/10 isolated-component and migrated-auth browser tests, including actual Inter loading, 320px reflow with doubled root text, both themes, keyboard dialog focus, axe checks, contrast, and selected rendered-pixel/geometry assertions. This does not constitute a manual screen-reader review or an actual browser 200% zoom check; those remain release-readiness checks. The historical laboratory's alternative palettes are outside the approved production combination.
 
 ## 6. Traceability
 
