@@ -10,7 +10,7 @@ The first production release is a multi-tenant, branded SaaS with fully custom t
 
 The PRD's offline token cache, offline acceptance, synchronization, first-timestamp-wins, and pending-sync count are **deferred by D-02**. The scanner must show a connection error and must not claim success when the server has not committed a check-in. The venue needs a tested network and backup connection to operate. Offline capability can be designed later, but it cannot be implied by a service worker or an installable app.
 
-FastAPI is the approved backend framework (D-09). Both email and phone are required and individually unique within an event (D-10). The 90-day timer starts at event end, and tenant admins may delete one participant or all participant data for an event (D-11). Section 12 service targets are approved (D-12). Paystack subscriptions in NGN are approved (D-13). The remaining **proposals** include supporting libraries/vendors, QR wire format, staff authentication policy, exact duplicate correction flow, privacy threshold, and subscription terms. Open decisions are in Section 16.
+FastAPI is the approved backend framework (D-09). Both email and phone are required and individually unique within an event (D-10). The 90-day timer starts at event end, and tenant admins may delete one participant or all participant data for an event (D-11). Section 12 service targets are approved (D-12). Paystack subscriptions in NGN are approved (D-13). Staff authentication and the least-privilege matrix are approved in G-02. The remaining **proposals** include supporting libraries/vendors, QR wire format, exact duplicate correction flow, privacy threshold, and subscription terms. Open decisions are in Section 16.
 
 ## 2. Architecture at a glance
 
@@ -60,7 +60,7 @@ This follows PostgreSQL's documented row-security behavior and OWASP's guidance 
 | Queue and short-lived cache | Redis broker/cache with Celery workers; transactional outbox in PostgreSQL | Independent workers for imports/sends/exports and an outbox to bridge database commit to queue publish | PostgreSQL-backed job runner if measured load and operational simplicity favor fewer services |
 | Object storage | Private S3-compatible bucket | Temporary imports, generated tickets and reports with lifecycle deletion and signed downloads | Any managed object store with equivalent access controls and lifecycle rules |
 | Edge/custom domains | Managed custom-hostname/TLS service, proposed Cloudflare for SaaS | Automates hostname ownership and certificate state for many tenant domains | Self-managed ingress/ACME if vendor terms or routing requirements make it preferable |
-| Email | Transactional provider adapter; proposed Amazon SES if deployment and residency review permit | Bulk sending, bounce/complaint webhooks, authenticated sender domains | Mailgun/SendGrid or local provider after deliverability and data-transfer assessment |
+| Email | Provider-independent transactional adapter; local SMTP capture for development; production disabled pending approval | G-02 permits invitation and reset delivery without committing to a vendor | Select a production provider only after deliverability, residency and commercial review |
 | SMS/WhatsApp | Provider adapter; evaluate Termii for Nigeria | Matches PRD's Nigeria focus and exposes messaging channels | Direct Meta/another BSP for WhatsApp, or another Nigeria SMS provider, if onboarding, throughput, or delivery is better |
 | Billing | Paystack subscriptions in NGN behind a billing adapter | Approved by D-13; provider webhooks and internal usage records stay separate from check-in | Provider change would require a product/operations decision |
 | Observability | OpenTelemetry traces, structured logs, metrics, error tracking | Correlates scans and workers across event peaks without vendor lock-in | Managed APM that supports the same signals |
@@ -101,7 +101,7 @@ These routes are proposed contracts, not a complete endpoint list. Public APIs a
 
 ## 6. Authentication and authorization
 
-**Proposed launch policy:** invite-only staff/admin accounts; password login with strong hashing (Argon2id) and MFA for platform and tenant admins; short-lived opaque server sessions in `Secure`, `HttpOnly`, host-only cookies with CSRF defense. Gate staff use their own account, authenticate before the event, and receive an event/gate-scoped session. Device ID is an installation identifier for audit, not an authentication factor. Login and session refresh require connectivity. Reassignment/revocation takes effect on the next request.
+**Approved identity policy (G-02):** first-party Argon2id staff passwords, invitation-only onboarding, opaque server-managed sessions in `Secure`, `HttpOnly`, host-only cookies with CSRF defense, and TOTP/recovery-code MFA for effective privileged permissions. Session timeouts, invitation/reset lifetimes, and the least-privilege role matrix are normative in [G-02](DECISIONS/G-02_STAFF_IDENTITY.md). A device ID is for operations/audit, not authentication. Login and session refresh require connectivity; revocation and permission changes take effect on the next request. Earlier provider and session values in this section were proposals and are superseded by G-02.
 
 | Capability | Platform admin | Tenant admin | Gate staff | Participant |
 |---|---:|---:|---:|---:|
@@ -111,7 +111,7 @@ These routes are proposed contracts, not a complete endpoint list. Public APIs a
 | Participant detail/report access | Explicit support grant only | Own tenant | — | Own submission only if retrieval later approved |
 | Messaging | — | Own tenant | — | Receives according to channel/legal basis |
 
-Authorization checks combine session, active membership, role, tenant, event status, and gate assignment. Platform admins do not automatically browse tenant participant data. Every privileged action is audited. Password, MFA, recovery, and session timing values need a security policy approval.
+Authorization checks combine session, active membership, effective permissions, tenant, event status, and gate assignment. Platform admins do not automatically browse tenant participant data. Every privileged action is audited. G-02 approves the identity and session policy; the compromised-password dataset and production email provider remain activation decisions.
 
 ## 7. QR issuance and online verification
 

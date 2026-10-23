@@ -1,8 +1,8 @@
 # Event Check-in Platform
 
-M1-01 foundation with the M1-02 tenant schema on this feature branch. The API is FastAPI; the web workspace is React, TypeScript and Vite. No product features or application screens are implemented yet. Approved product decisions D-01–D-13 remain in [the PRD review](docs/PRD_REVIEW.md).
+M1-01 foundation, M1-02 tenant schema, and M1-03 staff-authentication work on this feature branch. The API is FastAPI; the web workspace is React, TypeScript and Vite. Approved decisions D-01–D-13 and [G-02](docs/DECISIONS/G-02_STAFF_IDENTITY.md) govern this work. See [M1-03 identity contracts](docs/M1-03_AUTH_CONTRACTS.md).
 
-The minimum M0-02 contract used here is limited to `/api/v1` for future feature routes, separate health/readiness behavior, four named environments, and Alembic revision ordering. Event states, API errors, metrics, identity, QR, and provider contracts remain for M0-02 review. This foundation does not pre-approve them.
+M1-03 uses versioned `/api/v1/auth` routes. Event, QR, billing, scanner, and the remaining M0-02 contracts stay outside this milestone.
 
 ## Local startup
 
@@ -11,13 +11,16 @@ Prerequisites: Docker with Compose, Python 3.12 or 3.13, Node 22, and npm.
 ### Containers
 
 ```sh
+export AUTH_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 docker compose up --build -d
 docker compose run --rm migrate
 curl --fail http://127.0.0.1:8000/health
 curl --fail http://127.0.0.1:8000/ready
 ```
 
-The API is at `http://127.0.0.1:8000`; the blank web workspace is at `http://127.0.0.1:5173`. PostgreSQL is bound to `127.0.0.1:5433` with **local-only** credentials in `compose.yaml`. Stop with `docker compose down`; add `-v` only when intentionally deleting local data.
+Generate the encryption key once, store it outside Git, and reuse it across restarts. Changing it without re-encrypting stored TOTP secrets makes enrolled authenticators unusable.
+
+The API is at `http://127.0.0.1:8000`; the staff authentication workspace is at `http://127.0.0.1:5173`. Mailpit’s local inbox is at `http://127.0.0.1:8025`. PostgreSQL is bound to `127.0.0.1:5433` with **local-only** credentials in `compose.yaml`. Stop with `docker compose down`; add `-v` only when intentionally deleting local data.
 
 ### Host development
 
@@ -31,10 +34,15 @@ export APP_ENV=local
 export DATABASE_URL='postgresql+psycopg://eventcheckin:local_dev_only@localhost:5433/eventcheckin'
 alembic upgrade head
 export DATABASE_URL='postgresql+psycopg://eventcheckin_app:local_app_only@localhost:5433/eventcheckin'
+export IDENTITY_DATABASE_URL='postgresql+psycopg://eventcheckin_identity_app:local_identity_only@localhost:5433/eventcheckin'
+export AUTH_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+export EMAIL_SMTP_HOST=localhost
+export EMAIL_SMTP_PORT=1025
+export EMAIL_FROM=staff@local.example.test
 uvicorn app.main:app --reload --port 8000
 ```
 
-In another terminal: `cd frontend && npm install && npm run dev`. For local host tools, the `.env.local.example` file lists the required values. Do not use its local credentials in any remote environment. The service reads process environment variables; it does not automatically load `.env` files.
+In another terminal: `cd frontend && npm install && npm run dev`. For local host tools, the `.env.local.example` file lists the required values. A verified tenant hostname and initial owner are still needed to use the staff flow. To enable new credentials, supply an approved, versioned compromised-password corpus path and its whole-file SHA-256; the API fails closed without it. Do not use local credentials in any remote environment. The service reads process environment variables; it does not automatically load `.env` files.
 
 ## Checks
 
@@ -44,7 +52,7 @@ ruff check .
 mypy app
 pytest -q
 alembic upgrade head
-alembic downgrade base
+alembic downgrade 0002_tenant_foundation # isolated empty test database only
 alembic upgrade head
 cd ../frontend
 npm run lint
@@ -56,7 +64,7 @@ npm run build
 
 ## Environment and migration policy
 
-`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migration `0002_tenant_foundation` adds core tenant, event and registration tables, forced RLS, and a narrow domain resolver. See [schema notes](docs/M1-02_SCHEMA_NOTES.md).
+`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002_tenant_foundation` and `0003_staff_identity` add tenant isolation and staff identity respectively. See [schema notes](docs/M1-02_SCHEMA_NOTES.md) and [identity contracts](docs/M1-03_AUTH_CONTRACTS.md).
 
 Run migrations as a **single release step before routing traffic to new code**. Back up first, review generated SQL and destructive operations, and rehearse on staging. Prefer a forward fix after a migration reaches production; downgrade only when explicitly reviewed as safe for existing data. The baseline and M1-02 migration can be upgraded and downgraded on an empty database; do not downgrade a populated database without a reviewed data plan.
 

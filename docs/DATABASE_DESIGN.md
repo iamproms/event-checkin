@@ -183,4 +183,8 @@ If a client later requires database-per-tenant isolation, the explicit tenant ke
 5. Paystack subscription plan prices, interval, included usage, add-on charges, tax treatment, and nonpayment policy.
 6. Whether suppression records may outlive event PII and, if so, the lawful basis and representation.
 
-No DDL, migrations, or application features have been created.
+The sections above are the original design baseline; implemented migrations are documented below.
+
+# M1-03 approved identity extension
+
+The G-02 implementation adds Alembic revision `0003_staff_identity` after the M1-02 tenant foundation. It stores Argon2id password hashes, hashed opaque sessions/challenges/invitation/reset/recovery tokens, encrypted TOTP secrets, security audit events, event/gate assignments, and time-limited platform grants. `staff_invitations` and `event_assignments` are tenant-owned and use FORCE RLS plus composite tenant/event/gate references. Global identity tables are accessible only through the separate restricted identity login; the tenant runtime login has no grants on them. The migration role retains DDL ownership. See [M1-03 identity contracts](M1-03_AUTH_CONTRACTS.md) for the access boundary and migration behavior. The earlier schema descriptions above remain the approved M1-02 baseline.
