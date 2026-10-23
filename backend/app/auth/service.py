@@ -637,9 +637,12 @@ class AuthService:
             email, "Reset your password", f"{base_url}/reset#token={quote(raw)}"
         )
 
-    def complete_reset(self, hostname: str, token: str, password: str) -> None:
-        self.corpus.require_acceptable(password)
-        hashed = hash_password(password)
+    def complete_reset(
+        self, hostname: str, token: str, password: str, ip: str = "unknown"
+    ) -> None:
+        with Session(self.engine) as limiter, limiter.begin():
+            tenant = self._tenant(limiter, hostname)
+            self._limit(limiter, f"reset:complete:ip:{tenant}:{ip}", utcnow(), 20)
         with Session(self.engine) as db, db.begin():
             tenant = self._tenant(db, hostname)
             row = db.scalar(
@@ -656,6 +659,8 @@ class AuthService:
             credential = db.get(PasswordCredential, row.user_id)
             if credential is None:
                 raise AuthDenied("Reset link expired")
+            self.corpus.require_acceptable(password)
+            hashed = hash_password(password)
             credential.password_hash, credential.changed_at = hashed, utcnow()
             db.execute(
                 update(PasswordResetToken)

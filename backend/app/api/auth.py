@@ -260,7 +260,12 @@ def reset_complete(
     auth: AuthDependency,
 ) -> dict[str, str]:
     try:
-        auth.complete_reset(hostname(request), body.token, body.password)
+        auth.complete_reset(
+            hostname(request),
+            body.token,
+            body.password,
+            request.client.host if request.client else "unknown",
+        )
     except (AuthDenied, CorpusUnavailable, ValueError) as exc:
         raise handle_error(exc) from exc
     clear_cookie(response, SESSION_COOKIE)

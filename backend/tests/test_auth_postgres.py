@@ -591,8 +591,33 @@ def test_invitation_and_password_reset_replay(
             )
         with pytest.raises(AuthDenied):
             auth.complete_reset("auth-a.example.test", suspended_reset, "yet another safe password")
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                "app.auth.service.hash_password",
+                lambda _: pytest.fail("invalid reset token reached Argon2"),
+            )
+            with pytest.raises(AuthDenied):
+                auth.complete_reset(
+                    "auth-a.example.test",
+                    new_token(),
+                    "yet another safe password",
+                    "127.0.0.37",
+                )
     finally:
         _restore_scanner(auth_db)
+
+
+def test_reset_completion_throttles_invalid_tokens(auth_db: AuthDatabase) -> None:
+    auth = _service(auth_db)
+    for _ in range(20):
+        with pytest.raises(AuthDenied, match="Reset link expired"):
+            auth.complete_reset(
+                "auth-a.example.test", new_token(), "long safe password value", "127.0.0.38"
+            )
+    with pytest.raises(AuthDenied, match="Too many attempts"):
+        auth.complete_reset(
+            "auth-a.example.test", new_token(), "long safe password value", "127.0.0.38"
+        )
 
 
 def test_mfa_enrollment_and_replay(auth_db: AuthDatabase) -> None:
