@@ -40,25 +40,11 @@ services:
     environment:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
-      IDENTITY_DATABASE_URL: postgresql+psycopg://eventcheckin_identity_app:local_identity_only@db:5432/eventcheckin
-      AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:-}
-      COMPROMISED_PASSWORD_CORPUS: ${COMPROMISED_PASSWORD_CORPUS:-}
-      COMPROMISED_PASSWORD_SHA256: ${COMPROMISED_PASSWORD_SHA256:-}
-      EMAIL_SMTP_HOST: mailpit
-      EMAIL_SMTP_PORT: "1025"
-      EMAIL_FROM: staff@local.example.test
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
       role-setup:
         condition: service_completed_successfully
-      mailpit:
-        condition: service_started
-  mailpit:
-    image: axllent/mailpit:v1.31.5
-    ports:
-      - "127.0.0.1:1025:1025"
-      - "127.0.0.1:8025:8025"
   web:
     build: ./frontend
     environment:
