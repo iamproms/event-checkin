@@ -560,16 +560,18 @@ class AuthService:
             if db.get(TenantMembership, (tenant, user.id)) is not None:
                 raise AuthDenied("Membership already exists")
             mandatory = requires_mfa(invite.role)
-            db.add(
-                TenantMembership(
-                    tenant_id=tenant,
-                    user_id=user.id,
-                    role=invite.role,
-                    status="pending_mfa" if mandatory else "active",
-                    invited_at=invite.created_at,
-                    accepted_at=None if mandatory else utcnow(),
-                )
+            membership = TenantMembership(
+                tenant_id=tenant,
+                user_id=user.id,
+                role=invite.role,
+                status="pending_mfa" if mandatory else "active",
+                invited_at=invite.created_at,
+                accepted_at=None if mandatory else utcnow(),
             )
+            db.add(membership)
+            # EventAssignment has a composite FK to this row. The ORM has no
+            # mapped relationship that orders these independent pending inserts.
+            db.flush()
             if invite.event_id is not None:
                 db.add(
                     EventAssignment(

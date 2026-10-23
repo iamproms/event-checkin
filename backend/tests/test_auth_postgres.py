@@ -358,7 +358,9 @@ def _restore_scanner(db: AuthDatabase) -> None:
         )
 
 
-def test_invitation_and_password_reset_replay(auth_db: AuthDatabase, tmp_path: Path) -> None:
+def test_invitation_and_password_reset_replay(
+    auth_db: AuthDatabase, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     email = CapturedEmail()
     auth = AuthService(auth_db.identity, auth_db.settings, _corpus(tmp_path), email)
     session = _admin_session(auth_db)
@@ -418,8 +420,78 @@ def test_invitation_and_password_reset_replay(auth_db: AuthDatabase, tmp_path: P
         assert (
             auth.current("auth-a.example.test", invited_session)[0].email == "invited@example.test"
         )
+        with auth_db.owner.connect() as conn:
+            invited_user = conn.execute(
+                text("SELECT id FROM users WHERE email='invited@example.test'")
+            ).scalar_one()
+            assert (
+                conn.execute(
+                    text("""SELECT count(*) FROM tenant_memberships
+                  WHERE tenant_id=:tenant AND user_id=:user AND status='active'"""),
+                    {"tenant": auth_db.tenant_a, "user": invited_user},
+                ).scalar_one()
+                == 1
+            )
+            assert (
+                conn.execute(
+                    text("""SELECT count(*) FROM event_assignments
+                  WHERE tenant_id=:tenant AND user_id=:user
+                    AND event_id=:event AND gate_id=:gate"""),
+                    {
+                        "tenant": auth_db.tenant_a,
+                        "user": invited_user,
+                        "event": event,
+                        "gate": gate,
+                    },
+                ).scalar_one()
+                == 1
+            )
         with pytest.raises(AuthDenied):
             auth.accept_invitation("auth-a.example.test", invitation, "another safe password long")
+        with auth_db.owner.connect() as conn:
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM event_assignments WHERE user_id=:user"),
+                    {"user": invited_user},
+                ).scalar_one()
+                == 1
+            )
+
+        auth.issue_invitation(
+            "auth-a.example.test", session, "rollback@example.test", "gate_scanner", event, gate
+        )
+        rollback_token = parse_qs(urlsplit(email.links[-1]).fragment)["token"][0]
+
+        def fail_assignment(**_: object) -> None:
+            raise RuntimeError("simulated assignment failure after membership flush")
+
+        with monkeypatch.context() as patch:
+            patch.setattr("app.auth.service.EventAssignment", fail_assignment)
+            with pytest.raises(RuntimeError, match="simulated assignment failure"):
+                auth.accept_invitation(
+                    "auth-a.example.test", rollback_token, "safe rollback test password"
+                )
+        with auth_db.owner.connect() as conn:
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM users WHERE email='rollback@example.test'")
+                ).scalar_one()
+                == 0
+            )
+            assert (
+                conn.execute(
+                    text("SELECT accepted_at FROM staff_invitations WHERE token_digest=:digest"),
+                    {"digest": token_digest(rollback_token)},
+                ).scalar_one()
+                is None
+            )
+        retry_state, retry_session = auth.accept_invitation(
+            "auth-a.example.test", rollback_token, "safe rollback test password"
+        )
+        assert retry_state == "session"
+        assert (
+            auth.current("auth-a.example.test", retry_session)[0].email == "rollback@example.test"
+        )
         auth.request_reset("auth-a.example.test", "invited@example.test", "127.0.0.7")
         reset = parse_qs(urlsplit(email.links[-1]).fragment)["token"][0]
         auth.complete_reset("auth-a.example.test", reset, "new safe unlisted password value")
