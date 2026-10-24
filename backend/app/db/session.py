@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from uuid import UUID
 
+import idna
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -17,14 +18,27 @@ class TenantResolutionError(ValueError):
 
 
 def normalize_hostname(hostname: str) -> str:
-    candidate = hostname.strip().rstrip(".").lower()
-    if not candidate or ":" in candidate or "/" in candidate or len(candidate) > 253:
+    # One canonical IDNA2008/UTS-46 A-label form is used for claims and lookup.
+    # Strict request authority parsing is performed before this function.
+    candidate = hostname.strip().removesuffix(".")
+    if (
+        not candidate
+        or ":" in candidate
+        or "/" in candidate
+        or "@" in candidate
+        or "\\" in candidate
+    ):
         raise TenantResolutionError("Unrecognized tenant domain")
     try:
-        ascii_name = candidate.encode("idna").decode("ascii")
-    except UnicodeError as exc:
+        ascii_name = idna.encode(candidate, uts46=True, std3_rules=True).decode("ascii").lower()
+        if (
+            idna.encode(idna.decode(ascii_name), uts46=True, std3_rules=True).decode("ascii")
+            != ascii_name
+        ):
+            raise TenantResolutionError("Unrecognized tenant domain")
+    except idna.IDNAError as exc:
         raise TenantResolutionError("Unrecognized tenant domain") from exc
-    if any(not label or len(label) > 63 for label in ascii_name.split(".")):
+    if len(ascii_name) > 253 or "." not in ascii_name:
         raise TenantResolutionError("Unrecognized tenant domain")
     return ascii_name
 

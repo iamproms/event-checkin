@@ -1,0 +1,41 @@
+# M2-01 local operations and recovery
+
+## Prerequisites
+
+Use distinct runtime, identity, platform-control, bootstrap, migration-owner, and worker database credentials. `ops/local_roles.sql` provisions only local development roles. Set `PLATFORM_HOST`, `FALLBACK_DOMAIN_SUFFIX`, `PLATFORM_DATABASE_URL`, `IDENTITY_DATABASE_URL`, and `AUTH_ENCRYPTION_KEY`. Set `BOOTSTRAP_DATABASE_URL` only for the one-time operator command; remove it from the API environment after bootstrap. The bootstrap operator must have a reviewed email-control record, an attributable operator reference, and a dated grant expiry. An approved, versioned compromised-password corpus is required. Local fixture mode is enabled only in local/test environments; staging and production default to a disabled provider.
+
+Apply Alembic revision `0006_tenant_provisioning` using the migration owner. The migration reserves existing domain rows; it does not promote old records to active. Keep the M1-02 owner/runtime separation and FORCE RLS. Bootstrap with an interactive terminal:
+
+```sh
+python -m app.tenancy.bootstrap --email operator@example.test \
+  --operator-ref CHANGE-RECORD --email-verification-ref VERIFICATION-RECORD \
+  --grant-until 2026-11-01T00:00:00Z
+```
+
+The command consumes a database-enforced singleton through a restricted function; concurrent attempts cannot create a second actor. The bootstrap login has no direct table-write grants or HTTP equivalent. Its SQL connection hides bound parameters in error output. Keep its credential outside the API, workers, and routine operator environments. Further platform grants require a separate reviewed contract. Platform sign-in completes TOTP enrollment before any provisioning operation. Rotate or revoke a compromised grant through a reviewed operator process; a database trigger revokes existing platform sessions when a grant changes.
+
+## Provision and verify
+
+On the dedicated platform host, create a tenant. The result reserves a platform-owned fallback hostname and one-time DNS TXT proof. Configure the proof, certificate, edge mapping, and routing smoke check with the local fixture adapter or a future G-06-approved provider. Request a check, inspect the independent ownership/TLS/routing results, and activate only after all checks pass. The initial claim deadline is 48 hours; once a domain has been activated, reconciliation still requires the DNS proof to remain present and refreshes ownership evidence. An active domain whose evidence expires fails closed at request resolution even before the next reconciliation.
+
+Run the scheduler as `python -m app.tenancy.maintenance` with `DOMAIN_SCHEDULER_DATABASE_URL`. The domain worker uses `DOMAIN_WORKER_DATABASE_URL`; neither receives the platform-control credential. The scheduler creates durable PostgreSQL jobs and outbox events; the M1-04 dispatcher and worker perform checks. Queue outages do not commit an authoritative route change. If a worker crashes, the existing lease/retry machinery recovers the job. The reconciler locks the current domain row, compares the claim digest and observation order, and records safe error codes. Ownership, TLS, and smoke evidence expire independently; the smoke check must be less than 15 minutes old for routing. Reconciliation runs every five minutes while healthy, so a prolonged outage fails closed.
+
+If an unactivated claim expires, the authorized owner or platform actor can renew it. This rotates the proof and returns the new TXT value once; the old proof cannot validate the new claim. Active routes cannot rotate proofs without controlled deactivation.
+
+An expired, unverified claim still reserves its globally unique hostname. M2-01 has no cross-tenant claim release or transfer operation. A disputed or abandoned claim needs an approved operator policy before reassignment; do not edit the hostname or delete its audit history ad hoc. This prevents silent takeover but can temporarily block the rightful claimant.
+
+After the fallback is active, issue the first-owner invitation to a verified address through the approved local delivery adapter. The owner accepts on the fallback host and completes mandatory MFA before membership becomes active. Production invitation delivery remains disabled until its provider is approved. If delivery reports failure after the invitation is committed, the exact token is revoked and the failure is audited; it is never logged or revealed. The platform actor can then issue a replacement. If delivery reported success but the recipient did not receive the link, use the platform reissue action: it revokes the pending invitation and sends one new 48-hour link to the same address. The old link cannot be accepted. A database outage during failure compensation requires an operator to inspect/revoke the outstanding invitation before another attempt.
+
+Tenant owners/admins may request custom claims. A platform actor performs final activation. A custom primary can be deactivated only while the fallback is eligible; the fallback becomes primary. Certificate or ownership loss deactivates the affected custom route on reconciliation. Suspended tenants lose ordinary routing; only the fallback host and owner recovery permission remain. Closed tenants have no normal route.
+
+## Failure and incident checks
+
+- Unknown, duplicate, invalid, or untrusted-proxy Host authorities return 421. The edge must validate SNI/Host, strip forwarded authority headers, and restrict direct origin access to configured ingress peers. Uvicorn runs without proxy-header processing.
+- A dangling DNS record alone cannot activate a route. Proof, valid TLS, edge mapping, smoke check, and platform approval are all required.
+- Domain IDs and tenant IDs in platform URLs are checked against the MFA actor's current grant. Tenant domain URLs use server-resolved tenant membership and composite foreign keys.
+- Keep `PLATFORM_DATABASE_URL` away from workers and the bootstrap credential away from the API process. The domain worker and scheduler use dedicated roles; none of these restricted roles has participant-table access or `BYPASSRLS`.
+- Inspect domain error codes, `next_reconcile_at`, job state, and audit events during recovery. Never copy raw invitation tokens, challenge cookies, TOTP keys, or private user data into logs or job payloads.
+
+M2-01 cannot be marked complete until G-06 approves production/staging edge, certificate provider, owned staging hostname, and region, and a real HTTPS staging-domain ownership, issuance, activation, failure and recovery exercise passes.
+
+The `0006` downgrade is exercised only on an isolated, empty test database. Once initial-owner invitations or other M2-01 records exist, rollback needs a separate data migration and operator review. Local fixture DNS/TLS/smoke observations do not demonstrate production certificate issuance or real edge routing.

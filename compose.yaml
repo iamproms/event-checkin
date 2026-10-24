@@ -41,6 +41,10 @@ services:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
       IDENTITY_DATABASE_URL: postgresql+psycopg://eventcheckin_identity_app:local_identity_only@db:5432/eventcheckin
+      PLATFORM_DATABASE_URL: postgresql+psycopg://eventcheckin_platform_app:local_platform_only@db:5432/eventcheckin
+      PLATFORM_HOST: platform.local.example.test
+      FALLBACK_DOMAIN_SUFFIX: local.example.test
+      INGRESS_PROXY_IPS: "127.0.0.1"
       AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:-}
       COMPROMISED_PASSWORD_CORPUS: ${COMPROMISED_PASSWORD_CORPUS:-}
       COMPROMISED_PASSWORD_SHA256: ${COMPROMISED_PASSWORD_SHA256:-}
@@ -98,6 +102,9 @@ services:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
       JOBS_DATABASE_URL: postgresql+psycopg://eventcheckin_jobs_app:local_jobs_only@db:5432/eventcheckin
+      DOMAIN_WORKER_DATABASE_URL: postgresql+psycopg://eventcheckin_domain_worker_app:local_domain_worker_only@db:5432/eventcheckin
+      PLATFORM_HOST: platform.local.example.test
+      FALLBACK_DOMAIN_SUFFIX: local.example.test
       REDIS_URL: redis://redis:6379/0
     depends_on:
       role-setup:
@@ -117,6 +124,18 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+  domain-maintenance:
+    build: ./backend
+    command: ["python", "-m", "app.tenancy.maintenance"]
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
+      DOMAIN_SCHEDULER_DATABASE_URL: postgresql+psycopg://eventcheckin_domain_scheduler_app:local_domain_scheduler_only@db:5432/eventcheckin
+      PLATFORM_HOST: platform.local.example.test
+      FALLBACK_DOMAIN_SUFFIX: local.example.test
+    depends_on:
+      role-setup:
+        condition: service_completed_successfully
   storage-maintenance:
     build: ./backend
     command: ["python", "-m", "app.worker.storage_maintenance"]

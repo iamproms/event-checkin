@@ -75,6 +75,24 @@ class TenantDomain(Base):
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     verification_state: Mapped[str] = mapped_column(String(24), nullable=False)
     tls_state: Mapped[str] = mapped_column(String(24), nullable=False)
+    routing_state: Mapped[str] = mapped_column(
+        String(24), nullable=False, server_default="reserved"
+    )
+    claim_digest: Mapped[bytes | None] = mapped_column(LargeBinary)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ownership_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ownership_valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tls_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tls_valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    edge_ready: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    smoke_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    next_reconcile_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
@@ -82,14 +100,37 @@ class TenantDomain(Base):
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
         UniqueConstraint("hostname", name="uq_tenant_domains_hostname"),
+        UniqueConstraint("tenant_id", "id", name="uq_tenant_domains_tenant_id"),
         Index("ix_tenant_domains_tenant", "tenant_id"),
         Index(
             "uq_tenant_domains_primary",
             "tenant_id",
             unique=True,
-            postgresql_where=text(
-                "is_primary AND verification_state = 'verified' AND tls_state = 'active'"
-            ),
+            postgresql_where=text("is_primary AND routing_state = 'active'"),
+        ),
+        Index(
+            "uq_tenant_domains_fallback",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("kind = 'fallback'"),
+        ),
+        CheckConstraint("kind IN ('custom','fallback')", name="ck_domain_kind"),
+        CheckConstraint(
+            "verification_state IN ('pending','checking','verified','failed')",
+            name="ck_domain_verification",
+        ),
+        CheckConstraint(
+            "tls_state IN ('pending','issuing','active','failed')", name="ck_domain_tls"
+        ),
+        CheckConstraint(
+            "routing_state IN ('reserved','ready','active','deactivated')", name="ck_domain_routing"
+        ),
+        CheckConstraint(
+            "routing_state <> 'active' OR (verification_state='verified' "
+            "AND tls_state='active' AND edge_ready AND activated_at IS NOT NULL "
+            "AND ownership_valid_until IS NOT NULL AND tls_valid_until IS NOT NULL "
+            "AND smoke_checked_at IS NOT NULL)",
+            name="ck_domain_active_gates",
         ),
     )
 
@@ -391,8 +432,9 @@ class StaffInvitation(Base):
     event_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     gate_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     token_digest: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    invited_by: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    invited_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    platform_actor_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id")
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -401,6 +443,15 @@ class StaffInvitation(Base):
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
     __table_args__ = (
+        Index(
+            "uq_initial_owner_pending",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text(
+                "role='tenant_owner' AND platform_actor_id IS NOT NULL "
+                "AND accepted_at IS NULL AND revoked_at IS NULL"
+            ),
+        ),
         ForeignKeyConstraint(
             ["tenant_id", "event_id"],
             ["events.tenant_id", "events.id"],
@@ -419,6 +470,10 @@ class StaffInvitation(Base):
         UniqueConstraint("token_digest", name="uq_staff_invitations_token_digest"),
         CheckConstraint(
             "gate_id IS NULL OR event_id IS NOT NULL", name="ck_invitations_gate_event"
+        ),
+        CheckConstraint(
+            "(invited_by IS NOT NULL) <> (platform_actor_id IS NOT NULL)",
+            name="ck_invitation_inviter_source",
         ),
         Index("ix_staff_invitations_tenant_email", "tenant_id", "email"),
     )
@@ -527,6 +582,65 @@ class PlatformGrant(Base):
     )
 
 
+class PlatformBootstrap(Base):
+    __tablename__ = "platform_bootstrap"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    actor_user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    operator_ref: Mapped[str] = mapped_column(String(160), nullable=False)
+    email_verification_ref: Mapped[str] = mapped_column(String(160), nullable=False)
+    consumed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    __table_args__ = (CheckConstraint("id=1", name="ck_platform_bootstrap_singleton"),)
+
+
+class PlatformAuthChallenge(Base):
+    __tablename__ = "platform_auth_challenges"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    token_digest: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint("token_digest", name="uq_platform_auth_challenges_token"),
+        CheckConstraint("purpose IN ('mfa','enroll')", name="ck_platform_challenge_purpose"),
+    )
+
+
+class PlatformAuthSession(Base):
+    __tablename__ = "platform_auth_sessions"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    token_digest: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    idle_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    absolute_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mfa_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("token_digest", name="uq_platform_auth_sessions_token"),
+        CheckConstraint("idle_expires_at <= absolute_expires_at", name="ck_platform_session_idle"),
+        Index("ix_platform_auth_sessions_user", "user_id", "revoked_at"),
+    )
+
+
 class SecurityAuditEvent(Base):
     __tablename__ = "security_audit_events"
     id: Mapped[UUID] = mapped_column(
@@ -604,6 +718,29 @@ class JobRecord(Base):
         ),
         Index("ix_job_records_due", "status", "next_attempt_at", "created_at"),
         Index("ix_job_records_tenant_status", "tenant_id", "status", "created_at"),
+    )
+
+
+class DomainReconcileRequest(Base):
+    __tablename__ = "domain_reconcile_requests"
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    domain_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "job_id"],
+            ["job_records.tenant_id", "job_records.id"],
+            name="fk_domain_reconcile_job",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "domain_id"],
+            ["tenant_domains.tenant_id", "tenant_domains.id"],
+            name="fk_domain_reconcile_domain",
+        ),
+        Index("ix_domain_reconcile_tenant", "tenant_id", "domain_id"),
     )
 
 

@@ -75,7 +75,7 @@ def auth_db() -> Iterator[AuthDatabase]:
         with owner.connect() as conn:
             assert (
                 conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0005_reliable_jobs_storage"
+                == "0006_tenant_provisioning"
             )
             for table in ("staff_invitations", "event_assignments"):
                 state = conn.execute(
@@ -124,8 +124,12 @@ def auth_db() -> Iterator[AuthDatabase]:
                 conn.execute(
                     text(
                         "INSERT INTO tenant_domains "
-                        "(tenant_id,hostname,kind,verification_state,tls_state,activated_at) "
-                        "VALUES (:tenant,:host,'custom','verified','active',now())"
+                        "(tenant_id,hostname,kind,verification_state,tls_state,"
+                        "routing_state,activated_at,ownership_valid_until,"
+                        "tls_valid_until,edge_ready,smoke_checked_at) "
+                        "VALUES (:tenant,:host,'custom','verified','active',"
+                        "'active',now(),now()+interval '1 day',"
+                        "now()+interval '1 day',true,now())"
                     ),
                     {"tenant": tenant, "host": f"{name}.example.test"},
                 )
@@ -266,8 +270,10 @@ def test_status_and_role_transitions_revoke_sessions(auth_db: AuthDatabase) -> N
     )
     with auth_db.owner.begin() as conn:
         conn.execute(
-            text("UPDATE tenant_memberships SET role='tenant_admin' "
-                 "WHERE tenant_id=:tenant AND user_id=:user"),
+            text(
+                "UPDATE tenant_memberships SET role='tenant_admin' "
+                "WHERE tenant_id=:tenant AND user_id=:user"
+            ),
             {"tenant": auth_db.tenant_a, "user": auth_db.user},
         )
     _, pending_challenge = auth.login(
@@ -275,8 +281,10 @@ def test_status_and_role_transitions_revoke_sessions(auth_db: AuthDatabase) -> N
     )
     with auth_db.owner.begin() as conn:
         conn.execute(
-            text("UPDATE tenant_memberships SET role='gate_scanner' "
-                 "WHERE tenant_id=:tenant AND user_id=:user"),
+            text(
+                "UPDATE tenant_memberships SET role='gate_scanner' "
+                "WHERE tenant_id=:tenant AND user_id=:user"
+            ),
             {"tenant": auth_db.tenant_a, "user": auth_db.user},
         )
     with pytest.raises(AuthDenied):
@@ -285,17 +293,27 @@ def test_status_and_role_transitions_revoke_sessions(auth_db: AuthDatabase) -> N
         auth.verify_mfa("auth-a.example.test", pending_challenge, "000000", ip="127.0.0.35")
     assert auth.current("auth-b.example.test", other_tenant)[0].id == auth_db.user
     with auth_db.owner.connect() as conn:
-        assert conn.execute(
-            text("SELECT count(*) FROM security_audit_events "
-                 "WHERE action='user.status_changed' AND metadata->>'target_user_id'=:user"),
-            {"user": str(auth_db.user)},
-        ).scalar_one() >= 2
-        assert conn.execute(
-            text("SELECT count(*) FROM security_audit_events "
-                 "WHERE action='membership.changed' AND tenant_id=:tenant "
-                 "AND metadata->>'target_user_id'=:user"),
-            {"tenant": auth_db.tenant_a, "user": str(auth_db.user)},
-        ).scalar_one() >= 2
+        assert (
+            conn.execute(
+                text(
+                    "SELECT count(*) FROM security_audit_events "
+                    "WHERE action='user.status_changed' AND metadata->>'target_user_id'=:user"
+                ),
+                {"user": str(auth_db.user)},
+            ).scalar_one()
+            >= 2
+        )
+        assert (
+            conn.execute(
+                text(
+                    "SELECT count(*) FROM security_audit_events "
+                    "WHERE action='membership.changed' AND tenant_id=:tenant "
+                    "AND metadata->>'target_user_id'=:user"
+                ),
+                {"tenant": auth_db.tenant_a, "user": str(auth_db.user)},
+            ).scalar_one()
+            >= 2
+        )
 
 
 def test_identity_context_and_runtime_role_restriction(auth_db: AuthDatabase) -> None:
@@ -318,8 +336,10 @@ def test_identity_context_and_runtime_role_restriction(auth_db: AuthDatabase) ->
                 {"tenant": str(auth_db.tenant_a)},
             )
             conn.execute(
-                text("UPDATE tenant_memberships SET role='tenant_admin' "
-                     "WHERE tenant_id=:tenant AND user_id=:user"),
+                text(
+                    "UPDATE tenant_memberships SET role='tenant_admin' "
+                    "WHERE tenant_id=:tenant AND user_id=:user"
+                ),
                 {"tenant": auth_db.tenant_a, "user": auth_db.user},
             )
     with auth_db.identity.connect() as conn, pytest.raises(ProgrammingError):
@@ -658,9 +678,7 @@ def test_mfa_enrollment_and_replay(auth_db: AuthDatabase) -> None:
         assert auth.current("auth-a.example.test", session)[0].id == auth_db.user
         next_code = totp_code(secret, int(datetime.now(UTC).timestamp() // 30) + 1)
         with pytest.raises(AuthDenied, match="enrollment already completed"):
-            auth.verify_mfa(
-                "auth-a.example.test", stale_enrollment, next_code, ip="127.0.0.18"
-            )
+            auth.verify_mfa("auth-a.example.test", stale_enrollment, next_code, ip="127.0.0.18")
         state, challenge = auth.login(
             "auth-a.example.test", "staff@example.test", "correct horse battery staple", "127.0.0.9"
         )

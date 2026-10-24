@@ -5,6 +5,11 @@ export default defineConfig(({ mode }) => {
   const target = loadEnv(mode, ".", "API_").API_PROXY_TARGET || "http://localhost:8000";
   return {
     plugins: [react()],
+    build: { rollupOptions: { input: {
+      main: "index.html",
+      platform: "platform.html",
+      domains: "domains.html",
+    } } },
     server: {
       proxy: {
         "/api": target,

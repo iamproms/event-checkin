@@ -34,8 +34,11 @@ from app.db.models import (
     MfaRecoveryCode,
     PasswordCredential,
     PasswordResetToken,
+    PlatformAuthChallenge,
+    PlatformAuthSession,
     SecurityAuditEvent,
     StaffInvitation,
+    Tenant,
     TenantMembership,
     TotpCredential,
     User,
@@ -68,7 +71,7 @@ class AuthService:
     def _tenant(self, db: Session, hostname: str) -> UUID:
         host = normalize_hostname(hostname)
         tenant = db.execute(
-            text("SELECT resolve_active_tenant_domain(:host)"), {"host": host}
+            text("SELECT resolve_auth_tenant_domain(:host)"), {"host": host}
         ).scalar_one_or_none()
         if not isinstance(tenant, UUID):
             raise AuthDenied("Unauthorized")
@@ -81,6 +84,12 @@ class AuthService:
     def _member(db: Session, tenant: UUID, user: UUID) -> TenantMembership:
         member = db.get(TenantMembership, (tenant, user))
         if member is None or member.status != "active":
+            raise AuthDenied("Unauthorized")
+        record = db.get(Tenant, tenant)
+        if record is None or (
+            record.status != "active"
+            and not (record.status == "suspended" and member.role == "tenant_owner")
+        ):
             raise AuthDenied("Unauthorized")
         return member
 
@@ -223,6 +232,14 @@ class AuthService:
         with Session(self.engine) as db, db.begin():
             tenant = self._tenant(db, hostname)
             challenge = self._challenge(db, challenge_token, tenant)
+            tenant_record = db.get(Tenant, tenant)
+            member = db.get(TenantMembership, (tenant, challenge.user_id))
+            if (
+                tenant_record is None
+                or member is None
+                or (tenant_record.status == "suspended" and member.role != "tenant_owner")
+            ):
+                raise AuthDenied("Unauthorized")
             if challenge.purpose != "enroll":
                 raise AuthDenied("Invalid enrollment state")
             existing = db.get(TotpCredential, challenge.user_id)
@@ -291,6 +308,13 @@ class AuthService:
             challenge = self._challenge(db, challenge_token, tenant)
             member = db.get(TenantMembership, (tenant, challenge.user_id))
             if member is None or member.status not in {"active", "pending_mfa"}:
+                raise AuthDenied("Unauthorized")
+            tenant_record = db.get(Tenant, tenant)
+            if (
+                tenant_record is None
+                or tenant_record.status not in {"active", "suspended"}
+                or (tenant_record.status == "suspended" and member.role != "tenant_owner")
+            ):
                 raise AuthDenied("Unauthorized")
             totp = db.get(TotpCredential, challenge.user_id, with_for_update=True)
             if totp is None or totp.key_id != self.settings.auth_key_id:
@@ -417,6 +441,12 @@ class AuthService:
         with Session(self.engine) as db, db.begin():
             tenant = self._tenant(db, hostname)
             member = self._member(db, tenant, user.id)
+            tenant_record = db.get(Tenant, tenant)
+            if tenant_record is None or (
+                tenant_record.status == "suspended"
+                and (permission != "tenant.domain.recover" or member.role != "tenant_owner")
+            ):
+                raise Forbidden("Permission denied")
             live_user = db.get(User, user.id)
             if live_user is None or live_user.status != "active":
                 raise AuthDenied("Session expired")
@@ -538,6 +568,9 @@ class AuthService:
     def accept_invitation(self, hostname: str, token: str, password: str) -> tuple[str, str]:
         with Session(self.engine) as db, db.begin():
             tenant = self._tenant(db, hostname)
+            tenant_record = db.get(Tenant, tenant)
+            if tenant_record is None or tenant_record.status != "active":
+                raise AuthDenied("Invitation unavailable")
             invite = db.scalar(
                 select(StaffInvitation)
                 .where(StaffInvitation.token_digest == token_digest(token))
@@ -633,13 +666,9 @@ class AuthService:
                 )
             )
             self._audit(db, "password_reset.requested", user.id, tenant)
-        self.email.send_link(
-            email, "Reset your password", f"{base_url}/reset#token={quote(raw)}"
-        )
+        self.email.send_link(email, "Reset your password", f"{base_url}/reset#token={quote(raw)}")
 
-    def complete_reset(
-        self, hostname: str, token: str, password: str, ip: str = "unknown"
-    ) -> None:
+    def complete_reset(self, hostname: str, token: str, password: str, ip: str = "unknown") -> None:
         with Session(self.engine) as limiter, limiter.begin():
             tenant = self._tenant(limiter, hostname)
             self._limit(limiter, f"reset:complete:ip:{tenant}:{ip}", utcnow(), 20)
@@ -677,6 +706,22 @@ class AuthService:
                     AuthSession.revoked_at.is_(None),
                 )
                 .values(revoked_at=utcnow())
+            )
+            db.execute(
+                update(PlatformAuthSession)
+                .where(
+                    PlatformAuthSession.user_id == row.user_id,
+                    PlatformAuthSession.revoked_at.is_(None),
+                )
+                .values(revoked_at=utcnow())
+            )
+            db.execute(
+                update(PlatformAuthChallenge)
+                .where(
+                    PlatformAuthChallenge.user_id == row.user_id,
+                    PlatformAuthChallenge.consumed_at.is_(None),
+                )
+                .values(consumed_at=utcnow())
             )
             self._audit(db, "password_reset.completed", row.user_id, tenant)
 
