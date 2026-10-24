@@ -30,7 +30,9 @@ from app.db.models import (
     AuthChallenge,
     AuthRateLimit,
     AuthSession,
+    Event,
     EventAssignment,
+    Gate,
     MfaRecoveryCode,
     PasswordCredential,
     PasswordResetToken,
@@ -478,6 +480,33 @@ class AuthService:
                 raise Forbidden("Permission denied")
             return tenant
 
+    def manageable_event_scope(self, hostname: str, raw: str) -> tuple[UUID, list[UUID] | None]:
+        """Return server-verified event IDs before opening a tenant-data connection."""
+        user, member, _ = self.current(hostname, raw)
+        if member.role in {"tenant_owner", "tenant_admin"}:
+            return self.authorize(hostname, raw, "event.manage"), None
+        if member.role not in {"organizer", "manager"}:
+            raise Forbidden("Permission denied")
+        with Session(self.engine) as db, db.begin():
+            tenant = self._tenant(db, hostname)
+            candidates = db.scalars(
+                select(EventAssignment.event_id).where(
+                    EventAssignment.tenant_id == tenant,
+                    EventAssignment.user_id == user.id,
+                    EventAssignment.revoked_at.is_(None),
+                    EventAssignment.valid_from <= utcnow(),
+                    (
+                        EventAssignment.valid_until.is_(None)
+                        | (EventAssignment.valid_until > utcnow())
+                    ),
+                )
+            ).all()
+        authorized: list[UUID] = []
+        for event_id in set(candidates):
+            self.authorize(hostname, raw, "event.manage", event_id)
+            authorized.append(event_id)
+        return member.tenant_id, authorized
+
     def revoke_tenant_membership(self, hostname: str, raw_session: str, target: UUID) -> None:
         tenant = self.authorize(hostname, raw_session, "staff.manage")
         actor, _, _ = self.current(hostname, raw_session)
@@ -546,6 +575,23 @@ class AuthService:
         invitation = new_token()
         with Session(self.engine) as db, db.begin():
             self._tenant(db, hostname)
+            if event_id is not None:
+                event_status = db.scalar(
+                    select(Event.status).where(Event.tenant_id == tenant, Event.id == event_id)
+                )
+                if event_status not in {"draft", "published"}:
+                    raise Forbidden("Event assignment unavailable")
+            if gate_id is not None:
+                selected_gate_id = db.scalar(
+                    select(Gate.id).where(
+                        Gate.tenant_id == tenant,
+                        Gate.event_id == event_id,
+                        Gate.id == gate_id,
+                        Gate.status == "active",
+                    )
+                )
+                if selected_gate_id is None:
+                    raise Forbidden("Gate assignment unavailable")
             db.add(
                 StaffInvitation(
                     tenant_id=tenant,

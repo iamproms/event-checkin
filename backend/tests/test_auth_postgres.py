@@ -75,7 +75,7 @@ def auth_db() -> Iterator[AuthDatabase]:
         with owner.connect() as conn:
             assert (
                 conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0006_tenant_provisioning"
+                == "0007_event_configuration"
             )
             for table in ("staff_invitations", "event_assignments"):
                 state = conn.execute(
@@ -473,7 +473,7 @@ def test_invitation_and_password_reset_replay(
                     "tenant": auth_db.tenant_a,
                     "start": now,
                     "end": now + timedelta(hours=1),
-                    "purge": now + timedelta(days=90),
+                    "purge": now + timedelta(days=90, hours=1),
                 },
             )
             conn.execute(

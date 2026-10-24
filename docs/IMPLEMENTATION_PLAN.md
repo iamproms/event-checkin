@@ -122,6 +122,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 - **Definition of done:** Finance/product approve billing state table and invoices/receipts responsibility; operator reconciliation procedure exists.
 
 #### M2-03 — Configure events, forms and gates
+- **Approved v1 contract:** [G-01 event lifecycle](DECISIONS/G-01_EVENT_LIFECYCLE_V1.md). [API contract](M2-03_EVENT_API_CONTRACTS.md) and [runbook](M2-03_EVENT_RUNBOOK.md) record the M2-03 implementation. M2-02 billing was reprioritized for the demo-critical path and remains incomplete.
 - **Objective and scope:** Tenant-admin event creation/edit/publish/close, event time zone and one check-in window, versioned form schema, gate definitions, staff assignment hooks and event readiness state.
 - **Dependencies:** M1-02/03/05; M2-01; G-01 event lifecycle decisions.
 - **Acceptance criteria:** Event transitions are explicit and audited; `ends_at > starts_at`; form version is frozen with each registration; gate assignment cannot cross event/tenant; changing event end time recomputes purge due date under approved policy.

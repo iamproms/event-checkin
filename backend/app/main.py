@@ -8,6 +8,7 @@ from sqlalchemy.engine import Engine
 
 from app.api.auth import router as auth_router
 from app.api.domains import router as domains_router
+from app.api.events import router as events_router
 from app.api.health import ReadinessResponse, health, readiness
 from app.api.platform import router as platform_router
 from app.auth.corpus import CompromisedPasswordCorpus
@@ -16,6 +17,7 @@ from app.auth.service import AuthService
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.engine import build_engine
+from app.events.service import EventService
 from app.tenancy.authority import AuthorityDenied, canonical_authority
 from app.tenancy.domains import DisabledDomainProvider, DomainService, FixtureDomainProvider
 from app.tenancy.platform_auth import PlatformAuth
@@ -70,7 +72,9 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         response = await call_next(request)
-        if request.url.path.startswith(("/api/v1/auth", "/api/v1/platform", "/api/v1/domains")):
+        if request.url.path.startswith(
+            ("/api/v1/auth", "/api/v1/platform", "/api/v1/domains", "/api/v1/events")
+        ):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Referrer-Policy"] = "no-referrer"
         return response
@@ -78,9 +82,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(auth_router)
     app.include_router(platform_router)
     app.include_router(domains_router)
+    app.include_router(events_router)
     app.state.auth_service = None
     app.state.platform_auth = None
     app.state.domain_service = None
+    app.state.event_service = None
     app.state.email_delivery = DisabledEmailDelivery()
     if identity_engine is not None:
         email = (
@@ -101,6 +107,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             email,
         )
         app.state.email_delivery = email
+        app.state.event_service = EventService(database_engine, app.state.auth_service)
     if platform_engine is not None and identity_engine is not None:
         app.state.platform_auth = PlatformAuth(identity_engine, settings)
         if settings.fallback_domain_suffix is not None:

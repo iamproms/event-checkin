@@ -1,5 +1,7 @@
 # Event Check-in Platform — Database Design
 
+**M2-03 implemented extension:** Revision `0007_event_configuration` keeps the existing `events` and `gates` tables. It adds one check-in window and an optimistic revision to events; a composite-keyed, immutable `event_form_versions` snapshot table; and append-only `event_config_audit`. Both new tenant tables have FORCE RLS and restricted runtime grants. Initial snapshots are backfilled and inserted for new events, including legacy direct inserts. Registrations reference a snapshot using `(tenant_id,event_id,form_schema_version)`; the current event version has a deferred composite FK. Database checks constrain lifecycle values, window pairs/order, and the UTC end-plus-2160-hours purge deadline. The event transition trigger prevents cancellation/closure reopening and published schedule edits. See [G-01 v1](DECISIONS/G-01_EVENT_LIFECYCLE_V1.md) and [API contract](M2-03_EVENT_API_CONTRACTS.md).
+
 **Status:** Step 2 proposed logical and physical model  
 **Inputs:** [PRD review](PRD_REVIEW.md), decisions D-01–D-13  
 **Companion:** [Technical design](TECHNICAL_DESIGN.md)
