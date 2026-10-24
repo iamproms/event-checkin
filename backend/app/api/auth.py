@@ -65,11 +65,10 @@ AuthDependency = Annotated[AuthService, Depends(service)]
 
 
 def hostname(request: Request) -> str:
-    # Host validation and TLS termination are edge responsibilities in staging/production.
-    host = request.url.hostname
+    host = getattr(request.state, "trusted_hostname", None)
     if host is None:
         raise HTTPException(400, detail={"code": "INVALID_HOST", "message": "Invalid host"})
-    return host
+    return cast(str, host)
 
 
 def csrf(request: Request) -> None:
@@ -80,7 +79,8 @@ def csrf(request: Request) -> None:
             403, detail={"code": "CSRF_INVALID", "message": "Request verification failed"}
         )
     origin = request.headers.get("origin")
-    if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+    expected_origin = getattr(request.state, "trusted_origin", str(request.base_url))
+    if origin and origin.rstrip("/") != expected_origin.rstrip("/"):
         raise HTTPException(
             403, detail={"code": "CSRF_INVALID", "message": "Request verification failed"}
         )

@@ -41,14 +41,40 @@ def process_job(job_id: str) -> None:
         raise RuntimeError("Worker database role is not configured")
     operator = create_engine(current.jobs_database_url.get_secret_value(), pool_pre_ping=True)
     runtime = create_engine(current.database_url.get_secret_value(), pool_pre_ping=True)
+    domain_worker = (
+        create_engine(current.domain_worker_database_url.get_secret_value(), pool_pre_ping=True)
+        if current.domain_worker_database_url
+        else None
+    )
     try:
         handlers = {}
         if current.app_env in {Environment.LOCAL, Environment.TEST}:
             handlers["internal_test_noop"] = lambda session, job: None
+        if domain_worker is not None and current.fallback_domain_suffix:
+            from app.tenancy.domains import (
+                DisabledDomainProvider,
+                DomainService,
+                FixtureDomainProvider,
+            )
+
+            provider = (
+                FixtureDomainProvider(current.local_domain_fixture)
+                if current.local_domain_fixture
+                and current.app_env in {Environment.LOCAL, Environment.TEST}
+                else DisabledDomainProvider()
+            )
+            domains = DomainService(
+                domain_worker, runtime, None, provider, current.fallback_domain_suffix
+            )
+            handlers["domain.reconcile"] = lambda session, job: domains.reconcile(
+                job.id, job.tenant_id
+            )
         execute_job(operator, runtime, verified_job_id, handlers)
     finally:
         operator.dispose()
         runtime.dispose()
+        if domain_worker is not None:
+            domain_worker.dispose()
 
 
 celery_app.task(name="eventcheckin.process_job", acks_late=True)(process_job)

@@ -9,6 +9,8 @@ Permission = str
 TENANT_ADMIN = frozenset(
     {
         "tenant.settings",
+        "tenant.domain.manage",
+        "tenant.domain.recover",
         "staff.manage",
         "invitation.issue",
         "event.manage",

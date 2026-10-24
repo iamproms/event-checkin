@@ -1,5 +1,6 @@
 from enum import StrEnum
 from functools import lru_cache
+from ipaddress import ip_address
 
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,6 +38,14 @@ class Settings(BaseSettings):
     storage_region: str = "us-east-1"  # Local S3 signing default; not a production location.
     upload_url_seconds: int = 600
     download_url_seconds: int = 300
+    platform_host: str | None = None
+    fallback_domain_suffix: str | None = None
+    platform_database_url: SecretStr | None = None
+    bootstrap_database_url: SecretStr | None = None
+    domain_worker_database_url: SecretStr | None = None
+    domain_scheduler_database_url: SecretStr | None = None
+    ingress_proxy_ips: str = ""
+    local_domain_fixture: str | None = None
     log_level: str = "INFO"
 
     @field_validator(
@@ -45,6 +54,10 @@ class Settings(BaseSettings):
         "jobs_database_url",
         "dispatcher_database_url",
         "jobs_operator_database_url",
+        "platform_database_url",
+        "bootstrap_database_url",
+        "domain_worker_database_url",
+        "domain_scheduler_database_url",
     )
     @classmethod
     def require_postgres(cls, value: SecretStr | None) -> SecretStr | None:
@@ -64,8 +77,71 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def enforce_nonlocal_transport(self) -> "Settings":
+        from app.db.session import normalize_hostname
+
         if not 1 <= self.upload_url_seconds <= 3600 or not 1 <= self.download_url_seconds <= 3600:
             raise ValueError("signed URL lifetime is outside the allowed range")
+        if self.platform_host is not None:
+            self.platform_host = normalize_hostname(self.platform_host)
+        if self.fallback_domain_suffix is not None:
+            self.fallback_domain_suffix = normalize_hostname(self.fallback_domain_suffix)
+        if self.platform_host and self.fallback_domain_suffix:
+            if not self.platform_host.endswith("." + self.fallback_domain_suffix):
+                raise ValueError("platform host must be in the platform-owned fallback zone")
+        if self.platform_database_url is not None:
+            if not (self.platform_host and self.fallback_domain_suffix):
+                raise ValueError("platform control plane requires host and fallback zone")
+            platform_user = make_url(self.platform_database_url.get_secret_value()).username
+            for value in (
+                self.database_url,
+                self.identity_database_url,
+                self.jobs_database_url,
+                self.jobs_operator_database_url,
+            ):
+                if (
+                    value is not None
+                    and make_url(value.get_secret_value()).username == platform_user
+                ):
+                    raise ValueError("platform database role must be separate")
+        if self.bootstrap_database_url is not None:
+            bootstrap_user = make_url(self.bootstrap_database_url.get_secret_value()).username
+            for value in (
+                self.database_url,
+                self.identity_database_url,
+                self.platform_database_url,
+            ):
+                if (
+                    value is not None
+                    and make_url(value.get_secret_value()).username == bootstrap_user
+                ):
+                    raise ValueError("bootstrap database role must be separate")
+        for name, candidate in (
+            ("domain worker", self.domain_worker_database_url),
+            ("domain scheduler", self.domain_scheduler_database_url),
+        ):
+            if candidate is None:
+                continue
+            username = make_url(candidate.get_secret_value()).username
+            for other in (
+                self.database_url,
+                self.identity_database_url,
+                self.platform_database_url,
+                self.bootstrap_database_url,
+                self.jobs_database_url,
+                self.domain_scheduler_database_url
+                if name == "domain worker"
+                else self.domain_worker_database_url,
+            ):
+                if other is not None and make_url(other.get_secret_value()).username == username:
+                    raise ValueError(f"{name} database role must be separate")
+        if self.ingress_proxy_ips:
+            for peer in self.ingress_proxy_ips.split(","):
+                ip_address(peer.strip())
+        if self.local_domain_fixture is not None and self.app_env not in {
+            Environment.LOCAL,
+            Environment.TEST,
+        }:
+            raise ValueError("local domain fixture is forbidden outside local/test")
         if self.jobs_database_url is not None:
             jobs = make_url(self.jobs_database_url.get_secret_value())
             runtime = make_url(self.database_url.get_secret_value())
@@ -95,6 +171,8 @@ class Settings(BaseSettings):
             if identity.username == runtime.username:
                 raise ValueError("identity and tenant runtime database roles must differ")
         if self.app_env in {Environment.STAGING, Environment.PRODUCTION}:
+            if self.platform_database_url is not None and not self.ingress_proxy_ips:
+                raise ValueError("remote platform control plane requires trusted ingress peers")
             if self.identity_database_url is not None and self.auth_encryption_key is None:
                 raise ValueError("remote authentication requires AUTH_ENCRYPTION_KEY")
             for value in (
@@ -103,6 +181,10 @@ class Settings(BaseSettings):
                 self.jobs_database_url,
                 self.dispatcher_database_url,
                 self.jobs_operator_database_url,
+                self.platform_database_url,
+                self.bootstrap_database_url,
+                self.domain_worker_database_url,
+                self.domain_scheduler_database_url,
             ):
                 if value is None:
                     continue

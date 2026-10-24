@@ -80,7 +80,7 @@ def db() -> Iterator[JobDatabase]:
         owner = create_engine(url)
         with owner.connect() as conn:
             assert conn.scalar(text("SELECT version_num FROM alembic_version")) == (
-                "0005_reliable_jobs_storage"
+                "0006_tenant_provisioning"
             )
             for table in ("job_records", "outbox_events", "private_objects"):
                 assert conn.execute(
@@ -361,9 +361,12 @@ def test_published_but_lost_broker_message_is_recovered(db: JobDatabase) -> None
     assert publish_due_retries(db.dispatcher, republished.append) >= 1
     assert job_id in republished
     assert publish_due_retries(db.dispatcher, republished.append) == 0
-    assert execute_job(
-        db.operator, db.runtime, job_id, {"internal_test_noop": lambda session, job: None}
-    ) is True
+    assert (
+        execute_job(
+            db.operator, db.runtime, job_id, {"internal_test_noop": lambda session, job: None}
+        )
+        is True
+    )
 
 
 def test_expired_lease_retry_dead_and_operator_recovery(db: JobDatabase) -> None:
