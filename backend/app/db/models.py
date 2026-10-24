@@ -194,6 +194,9 @@ class Event(Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     registration_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     registration_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    checkin_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    checkin_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     form_schema_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     form_schema: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
@@ -201,10 +204,44 @@ class Event(Base):
     pii_purge_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     pii_purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "id", "form_schema_version"],
+            [
+                "event_form_versions.tenant_id",
+                "event_form_versions.event_id",
+                "event_form_versions.version",
+            ],
+            name="fk_events_current_form",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         UniqueConstraint("tenant_id", "id", name="uq_events_tenant_id"),
         UniqueConstraint("tenant_id", "slug", name="uq_events_tenant_slug"),
         CheckConstraint("ends_at > starts_at", name="ck_events_time_order"),
         CheckConstraint("form_schema_version > 0", name="ck_events_form_version"),
+        CheckConstraint(
+            "status IN ('draft','published','closed','cancelled')", name="ck_events_status"
+        ),
+        CheckConstraint("revision > 0", name="ck_events_revision"),
+        CheckConstraint(
+            "(registration_opens_at IS NULL) = (registration_closes_at IS NULL)",
+            name="ck_events_registration_pair",
+        ),
+        CheckConstraint(
+            "registration_opens_at IS NULL OR registration_closes_at > registration_opens_at",
+            name="ck_events_registration_order",
+        ),
+        CheckConstraint(
+            "(checkin_opens_at IS NULL) = (checkin_closes_at IS NULL)",
+            name="ck_events_checkin_pair",
+        ),
+        CheckConstraint(
+            "checkin_opens_at IS NULL OR checkin_closes_at > checkin_opens_at",
+            name="ck_events_checkin_order",
+        ),
+        CheckConstraint(
+            "pii_purge_due_at = ends_at + interval '2160 hours'", name="ck_events_purge_due"
+        ),
         Index("ix_events_tenant_status", "tenant_id", "status"),
     )
 
@@ -227,6 +264,53 @@ class Gate(Base):
         ),
         UniqueConstraint("tenant_id", "event_id", "id", name="uq_gates_event_id"),
         UniqueConstraint("tenant_id", "event_id", "name", name="uq_gates_event_name"),
+        CheckConstraint("status IN ('active','inactive')", name="ck_gates_status"),
+    )
+
+
+class EventFormVersion(Base):
+    __tablename__ = "event_form_versions"
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    schema: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id"],
+            ["events.tenant_id", "events.id"],
+            name="fk_event_form_versions_event",
+        ),
+        CheckConstraint("version > 0", name="ck_event_form_versions_positive"),
+    )
+
+
+class EventConfigAudit(Base):
+    __tablename__ = "event_config_audit"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    actor_user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(48), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id"],
+            ["events.tenant_id", "events.id"],
+            name="fk_event_config_audit_event",
+        ),
     )
 
 

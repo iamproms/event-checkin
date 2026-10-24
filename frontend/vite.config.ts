@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
       main: "index.html",
       platform: "platform.html",
       domains: "domains.html",
+      events: "events.html",
     } } },
     server: {
       proxy: {

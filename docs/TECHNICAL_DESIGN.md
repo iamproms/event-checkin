@@ -1,5 +1,7 @@
 # Event Check-in Platform — Technical Design
 
+**M2-03 implementation note:** Event configuration is a tenant-authorized FastAPI module using the existing M1-03 opaque session, CSRF, effective permission policy and transaction-scoped FORCE RLS runtime connection. Row locks and revision checks serialize edit/publish/close/cancel operations. Published form snapshots are append-only and registrations retain their version reference. The organizer interface at `/events.html` uses Quiet Precision primitives. Approved lifecycle and engineering bounds are recorded in [G-01 v1](DECISIONS/G-01_EVENT_LIFECYCLE_V1.md); endpoint examples are in [M2-03 contracts](M2-03_EVENT_API_CONTRACTS.md). M2-02 billing was reprioritized for the demo-critical path and remains incomplete.
+
 **Status:** Step 2 design revised with D-09–D-13; remaining choices listed in Section 16  
 **Inputs:** [PRD review](PRD_REVIEW.md), source PRD v1.0, decisions D-01–D-13  
 **Companion:** [Database design](DATABASE_DESIGN.md)

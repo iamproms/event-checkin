@@ -1,8 +1,10 @@
 # Event Check-in Platform
 
-M1-01 foundation, M1-02 tenant schema, M1-03 staff authentication, and M1-04 reliable-job/private-file primitives are merged. M1-05 shared UI primitives are in progress on this branch. The API is FastAPI; the web workspace is React, TypeScript and Vite. Approved decisions D-01–D-13, [G-02](docs/DECISIONS/G-02_STAFF_IDENTITY.md), [G-07](docs/DECISIONS/G-07_VISUAL_FOUNDATION.md), and the [M1-04 decision record](docs/DECISIONS/M1-04_JOBS_FILES.md) govern this work.
+M2-03 event configuration: see [event API contracts](docs/M2-03_EVENT_API_CONTRACTS.md) and [local runbook](docs/M2-03_EVENT_RUNBOOK.md). The event interface is at `/events.html` on an authorized tenant host.
 
-M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file routes. Event, QR, billing, and scanner features remain outside this milestone.
+M1-01 foundation through M1-05 shared UI primitives and M2-01 tenant provisioning are merged. The API is FastAPI; the web workspace is React, TypeScript and Vite. Approved decisions D-01–D-13, [G-02](docs/DECISIONS/G-02_STAFF_IDENTITY.md), [G-07](docs/DECISIONS/G-07_VISUAL_FOUNDATION.md), and the [M1-04 decision record](docs/DECISIONS/M1-04_JOBS_FILES.md) govern this work.
+
+M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file routes. M2-03 adds event configuration; registration, QR, billing, and scanner features remain outside this milestone.
 
 ## Local startup
 
