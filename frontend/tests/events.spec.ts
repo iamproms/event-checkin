@@ -25,6 +25,10 @@ test('event-local dates convert without device-zone or DST guessing', () => {
 });
 
 test('event configuration is readable, accessible and reflows at 320px and 200% text', async ({ page }) => {
+  // Eight full Axe scans across two themes and four panels can be CPU-bound on
+  // the single-worker Fedora validation host. Keep every scan, but give this
+  // exhaustive matrix its own budget instead of the generic interaction limit.
+  test.setTimeout(180_000);
   await page.route('**/api/v1/events', (route) => route.fulfill({ json: { events: [draft] } }));
   await page.route('**/api/v1/events/*/gates', (route) => route.fulfill({
     json: { gates: [{ id: '1e34e24e-b8cd-4d96-a154-cad10484f28b', name: 'Main entrance', enabled: true }] },

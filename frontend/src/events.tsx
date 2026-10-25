@@ -4,6 +4,7 @@ import { Button, Dialog, Field, NavItem, Status, initializeTheme, setTheme, type
 import { getJson, ManagementApiError, mutateJson } from './management-api';
 import { eventLocal, eventUtc } from './event-time';
 import { describeEvent, type EventState } from './event-vocabulary';
+import { TenantBrandMark } from './tenant-brand';
 import './event-management.css';
 
 type FormField = { key: string; label: string; type: 'text' | 'textarea' | 'select' | 'checkbox'; required: boolean; options?: string[] };
@@ -174,7 +175,7 @@ function App() {
   }
   const editable = selected?.status === 'draft';
   return <main className="event-management">
-    <header className="event-header"><div><p className="brand">Event Check-in / Events</p>
+    <header className="event-header"><div><p className="brand"><TenantBrandMark area="Events" /></p>
       <h1>{createMode ? 'Create event' : selected ? selected.name : 'Events'}</h1></div>
       <Button variant="secondary" onClick={() => { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); setCurrentTheme(next); }}>
         Use {theme === 'light' ? 'dark' : 'light'} theme</Button></header>

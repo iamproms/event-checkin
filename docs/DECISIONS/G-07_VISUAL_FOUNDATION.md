@@ -16,6 +16,12 @@
 
 The initial token values and typography scale are recorded in [DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md). The prior comparison laboratory remains historical review evidence, not a runtime theme picker.
 
+## M2-04 tenant-brand bounds
+
+Tenant primary and accent colors use six-digit sRGB hex values. Each published color must have at least 3:1 contrast against the actual approved light and dark surfaces. Primary-action text is selected from the approved light/dark text pair and must reach 4.5:1 against the primary fill. Accent is used only for non-text boundaries and restrained identity details. Tenant colors never replace semantic success, warning, danger, focus, scanner-result, or body-text tokens. The branding editor previews both themes, but the backend repeats the checks and is authoritative.
+
+Logos are raster-only PNG/JPEG/WebP inputs, decoded and re-encoded as metadata-free PNG. SVG and animated content are intentionally unsupported.
+
 ## Still feature-level decisions
 
-Brand-upload validation, exact tenant accent bounds and attribution, scanner device/browser support, scanner result copy, platform navigation layouts, and production screen compositions require decisions in their owning milestones. M1-05 supplies accessible primitives and does not settle those contracts.
+Scanner device/browser support, scanner result copy, platform navigation layouts, and later production screen compositions require decisions in their owning milestones. M1-05 supplies accessible primitives; M2-04 owns the brand validation contract above.

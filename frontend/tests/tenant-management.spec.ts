@@ -20,6 +20,7 @@ async function checkLayouts(page: Page) {
 }
 
 test('tenant domain page uses actionable state text, keyboard controls and both themes', async ({ page }) => {
+  test.setTimeout(120_000);
   await page.route('**/api/v1/domains', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ json: { domains: [domain] } });

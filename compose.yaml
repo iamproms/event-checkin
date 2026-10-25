@@ -51,6 +51,15 @@ services:
       EMAIL_SMTP_HOST: mailpit
       EMAIL_SMTP_PORT: "1025"
       EMAIL_FROM: staff@local.example.test
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ENDPOINT_URL: http://object-storage:9000
+      STORAGE_BUCKET: eventcheckin-private
+      STORAGE_ACCESS_KEY: local_object_key
+      STORAGE_SECRET_KEY: local_object_secret_only
+      TICKET_KEYRING_JSON: '{"1":"dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHQ="}'
+      TICKET_ACTIVE_KEY_VERSION: "1"
+      TICKET_ISSUANCE_ENABLED: "true"
+      REGISTRATION_RATE_HMAC_KEY: local_registration_rate_key_12345
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -58,6 +67,10 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+      redis:
+        condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
@@ -106,11 +119,18 @@ services:
       PLATFORM_HOST: platform.local.example.test
       FALLBACK_DOMAIN_SUFFIX: local.example.test
       REDIS_URL: redis://redis:6379/0
+      EMAIL_SMTP_HOST: mailpit
+      EMAIL_SMTP_PORT: "1025"
+      EMAIL_FROM: staff@local.example.test
+      TICKET_KEYRING_JSON: '{"1":"dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHQ="}'
+      TICKET_ACTIVE_KEY_VERSION: "1"
     depends_on:
       role-setup:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
   dispatcher:
     build: ./backend
     command: ["python", "-m", "app.worker.dispatcher"]

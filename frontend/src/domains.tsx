@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Button, Field, Status, initializeTheme, setTheme, type Theme } from './ui';
 import { describeDomain, type DomainState } from './domain-vocabulary';
 import { getJson, ManagementApiError, mutateJson } from './management-api';
+import { TenantBrandMark } from './tenant-brand';
 import './management.css';
 
 type ClaimResult = { domain_id: string; dns_record: string; dns_value: string };
@@ -49,7 +50,7 @@ function App() {
   }
 
   return <main className="management">
-    <header><p className="brand">Event Check-in / Domains</p>
+    <header><p className="brand"><TenantBrandMark area="Domains" /></p>
       <Button variant="secondary" onClick={changeTheme}>Use {theme === 'light' ? 'dark' : 'light'} theme</Button>
     </header>
     <h1>Web domains</h1>

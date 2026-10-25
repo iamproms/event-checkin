@@ -69,6 +69,35 @@ def process_job(job_id: str) -> None:
             handlers["domain.reconcile"] = lambda session, job: domains.reconcile(
                 job.id, job.tenant_id
             )
+        if current.ticket_keyring_json is not None:
+            from app.branding.assets import S3BrandingStorage
+            from app.tickets.crypto import TicketKeyring
+            from app.tickets.email import DisabledTicketTransport, LocalSmtpTicketTransport
+            from app.tickets.service import TicketService
+            from app.worker.storage import s3_storage
+
+            ticket_transport = (
+                LocalSmtpTicketTransport(
+                    current.email_smtp_host, current.email_smtp_port, current.email_from
+                )
+                if current.app_env in {Environment.LOCAL, Environment.TEST}
+                and current.email_smtp_host
+                and current.email_from
+                else DisabledTicketTransport()
+            )
+            tickets = TicketService(
+                runtime,
+                None,
+                TicketKeyring.from_settings(current),
+                ticket_transport,
+                S3BrandingStorage(s3_storage(current))
+                if current.storage_bucket
+                and current.storage_access_key
+                and current.storage_secret_key
+                else None,
+            )
+            handlers["ticket.issue"] = tickets.issue_job
+            handlers["ticket.deliver"] = tickets.deliver_job
         execute_job(operator, runtime, verified_job_id, handlers)
     finally:
         operator.dispose()
