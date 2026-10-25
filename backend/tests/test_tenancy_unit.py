@@ -10,7 +10,7 @@ from starlette.requests import Request
 from app.core.config import Settings
 from app.db.models import TenantDomain
 from app.db.session import TenantResolutionError, normalize_hostname
-from app.tenancy.authority import AuthorityDenied, canonical_authority
+from app.tenancy.authority import AuthorityDenied, canonical_authority, trusted_client_address
 from app.tenancy.domains import FixtureDomainProvider, observe, route_eligible
 
 
@@ -116,6 +116,53 @@ def test_untrusted_remote_peer_rejected() -> None:
         )[0]
         == "tenant.example.test"
     )
+    trusted = request(
+        "tenant.example.test",
+        "/api/v1/public/events/demo",
+        peer="192.0.2.5",
+        extra=[(b"x-forwarded-for", b"203.0.113.42")],
+    )
+    assert trusted_client_address(trusted, settings) == "203.0.113.42"
+    with pytest.raises(AuthorityDenied):
+        trusted_client_address(
+            request(
+                "tenant.example.test",
+                "/api/v1/public/events/demo",
+                peer="198.51.100.9",
+                extra=[(b"x-forwarded-for", b"203.0.113.42")],
+            ),
+            settings,
+        )
+    for extra in (
+        [],
+        [(b"x-forwarded-for", b"203.0.113.42, 198.51.100.1")],
+        [(b"x-forwarded-for", b"203.0.113.42"), (b"x-forwarded-for", b"198.51.100.1")],
+    ):
+        with pytest.raises(AuthorityDenied):
+            trusted_client_address(
+                request(
+                    "tenant.example.test",
+                    "/api/v1/public/events/demo",
+                    peer="192.0.2.5",
+                    extra=extra,
+                ),
+                settings,
+            )
+
+
+def test_testclient_peer_is_only_accepted_in_test_environment() -> None:
+    test_settings = Settings(
+        app_env="test",
+        database_url="postgresql+psycopg://runtime:local@localhost/test",
+    )
+    synthetic = request("testserver", "/api/v1/auth/csrf", peer="testclient")
+    assert trusted_client_address(synthetic, test_settings) == "127.0.0.1"
+    local_settings = Settings(
+        app_env="local",
+        database_url="postgresql+psycopg://runtime:local@localhost/test",
+    )
+    with pytest.raises(AuthorityDenied):
+        trusted_client_address(synthetic, local_settings)
 
 
 def test_fixture_observation_is_tenant_bound_and_fail_closed(tmp_path: object) -> None:

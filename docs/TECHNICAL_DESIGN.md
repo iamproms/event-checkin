@@ -117,14 +117,14 @@ Authorization checks combine session, active membership, effective permissions, 
 
 ## 7. QR issuance and online verification
 
-**Proposed wire format:** `v1.<tenant-id>.<event-id>.<ticket-id>.<random-nonce>.<key-version>.<HMAC-SHA256>`, encoded as a QR. IDs are random UUIDs; nonce has at least 128 bits of CSPRNG entropy. The MAC covers all preceding fields with a server-held, versioned secret. The QR contains no name, email, phone, custom answers, or URLs. Signing proves server issuance; it does not make a copied QR non-transferable. TLS protects it in transit, and the stored resend copy is encrypted at rest. Never ship verification secrets to scanners.
+**Approved G-03 wire format:** `v<key-version>.<opaque-random-value>`, where the value contains 32 CSPRNG bytes encoded as base64url. It contains no tenant, event, ticket, registration, contact, route, or analytics identifier. The online server derives a versioned HMAC verification digest and looks up an active ticket inside an already established tenant/event scope. PostgreSQL stores only that digest and an AES-256-GCM resend copy bound to tenant, event, registration, and ticket identifiers as authenticated data. Master keys remain outside PostgreSQL. A copied QR remains bearer evidence; cryptography does not make it non-transferable. Never ship verification or decryption keys to scanners.
 
 Issue one active ticket per registration. `resend` sends the current active ticket again from an encrypted stored copy; `reissue` revokes the current ticket and creates a new one. Both actions are audit events. Ticket state and event status, not the signature alone, decide entry.
 
 ### Scan transaction
 
 1. Scanner submits the QR body, event/gate/device IDs, and a client-generated idempotency key over HTTPS. The server derives tenant and staff scope from host/session and applies request-size/rate limits.
-2. Verify format, MAC, event/tenant binding, and active event window. Fetch ticket and compare a server-side digest of the full credential. Never log the raw QR.
+2. Validate the opaque credential format, derive its keyed digest using the referenced retained key version, and find an active ticket inside the server-derived event/tenant scope. Never log the raw QR.
 3. In one database transaction, insert or find the idempotency record, conditionally move the ticket from `active` to `used`, insert a check-in and scan attempt, and update counters/outbox. PostgreSQL row locking/conditional update makes concurrent gate requests yield one success.
 4. Return a definitive `accepted`, `duplicate`, `invalid`, `revoked`, or `event_closed` result with server time. Gate staff see only result and a neutral help instruction; tenant admins can inspect authorized scan detail. A retry with the same idempotency key returns the original result.
 
@@ -148,10 +148,10 @@ If provisional device scanning is ever approved, a sync request should carry a s
 
 ## 9. Registration, import, and background work
 
-- Self-registration requires each attendee's own email and phone, validates the published schema, normalizes email/phone, checks both event-scoped unique constraints, records source/time/consent evidence, creates a registration and ticket, and places a delivery request in the transactional outbox. A duplicate email or duplicate phone returns a field-specific error; it never merges records automatically. Response does not depend on provider delivery.
+- Self-registration requires each attendee's own email and phone, validates the published schema, normalizes email/phone, checks both event-scoped unique constraints, records source/time/privacy evidence, and atomically creates a registration plus an idempotent ticket-issuance job in the transactional outbox. The worker creates the ticket and delivery intent. A duplicate email or duplicate phone receives the same neutral accepted response as a new submission; it never enumerates, merges, or replaces a registration. Response does not depend on provider delivery.
 - Bulk upload streams CSV/XLSX from private object storage through a Celery worker, checks file type/size, detects formula injection risks, validates rows, and returns preview/error files. Commit is explicit and idempotent. Each accepted row uses the same registration service as self-registration and rejects repeated normalized email or phone within the file or existing event records. Correction/replacement behavior remains open.
 - Outbox dispatcher publishes jobs to Celery; workers handle import batches, ticket mail, campaigns, exports, domain provisioning, billing callbacks, and retention. Jobs carry only IDs, re-fetch data under tenant context, use bounded retries/backoff, and move permanent failures to an inspectable failed-job state. Workers are idempotent because delivery and retries can repeat.
-- Provider delivery callbacks reconcile message state by provider message ID. At-least-once callbacks and jobs must be idempotent. A sent count is not a delivered count.
+- A future approved provider adapter may reconcile delivery callbacks by provider message ID only after its signature/replay contract is approved. At-least-once callbacks and jobs must be idempotent. The current provider-neutral foundation exposes no unauthenticated callback route; a sent count is not a delivered count.
 - Campaign sends require a computed recipient preview, suppression/consent filtering, and a recorded admin confirmation. WhatsApp templates and onboarding are provider/policy dependencies. The current WhatsApp policy requires approved templates for business-initiated conversations. [WhatsApp Business policy](https://whatsappbusiness.com/policy/).
 
 ## 10. Billing and custom domains
@@ -229,7 +229,7 @@ These affect specific implementation contracts. The rest of the architecture can
 4. **Deletion execution:** D-11 approves the event-end anchor and both person/event self-service scopes. Decide whether an admin-requested deletion is immediate or queued with a short reversal window, and how pre-event deletion affects displayed counts.
 5. **Messaging:** which sends are transactional vs promotional; consent/opt-out rules, template ownership, sender verification, and provider onboarding. Provider and legal review must precede production sends.
 6. **Data location and vendors:** choose deployment region and approve cross-border processing/provider list after privacy review.
-7. **QR confidentiality:** approve a signed, non-PII QR payload with encrypted storage and TLS transport as the interpretation of the PRD's “signed/encrypted” wording. Encrypting the QR payload itself is possible, but does not prevent copying or improve the online single-use guarantee.
+7. **QR confidentiality:** resolved by [G-03](DECISIONS/G-03_QR_SECURITY_V1.md): an opaque random online credential, keyed verification digest and authenticated-encrypted resend copy. Atomic single-use redemption remains M4-02.
 
 ## Reference documentation
 
@@ -238,3 +238,13 @@ The linked official documentation and authority sources above were checked for f
 ## M2-01 approved tenant-domain implementation note
 
 The earlier alternatives and unresolved staff-policy questions above predate approved G-02 and the M2-01 product-owner decision. Revision `0006_tenant_provisioning` introduces a dedicated platform host and MFA session, explicit `tenant.provision` grants, an operator-only one-time bootstrap, platform-owned fallback hosts, and independent ownership/TLS/routing states. A restricted platform role handles control-plane metadata without participant-table grants or RLS bypass. The bootstrap login can invoke only a database-enforced one-time function. Separate restricted worker and scheduler roles handle domain observations and durable checks. Tenant claims require server-verified owner/admin membership; platform actors alone activate routes. The canonical Host comes from a single validated authority header, with ingress peers restricted in remote environments. Forwarded authority is rejected. A PostgreSQL resolver checks current tenant/domain safety predicates on every request, including 15-minute smoke-check freshness, so expired evidence fails closed even before the next job runs. Provider-neutral interfaces default to disabled outside local/test fixtures. See [M2-01 decision](DECISIONS/M2-01_TENANT_DOMAINS.md), [API contracts](M2-01_API_CONTRACTS.md), and [runbook](M2-01_PROVISIONING_RUNBOOK.md). G-06 still gates a real staging HTTPS demonstration and production activation.
+
+## M2-04 / M3-01 / M3-02 implemented extension
+
+Revisions `0008`–`0010` connect tenant branding, public registration, ticket issuance and delivery without selecting production vendors. Public requests first pass strict Host/authority validation. Remote traffic is accepted only from configured ingress peers; the edge must overwrite a single `X-Forwarded-For` value. The database resolves an active verified tenant domain and establishes `SET LOCAL app.tenant_id`; request bodies cannot select a tenant.
+
+Brand publication uses tenant-row serialization, an optimistic draft revision, immutable versions and append-only actor audit. Logo bytes are bounded, decoded as one raster frame and re-encoded to private PNG. The backend validates actual primary/accent use against both theme surfaces. Published branding is read through the tenant host and cannot alter platform semantic/focus tokens.
+
+Registration loads one published event and its immutable current form version, checks the half-open server-time window, validates normalized required contacts and allowlisted custom answers, and records exact immutable G-04 notice evidence. The registration, consent, idempotent issuance job and transactional outbox row commit together. Independent partial indexes settle email and phone races. Redis throttling is fail-closed and stores only a keyed address digest.
+
+Ticket credentials follow [G-03](DECISIONS/G-03_QR_SECURITY_V1.md). Workers derive tenant scope from the PostgreSQL job, never a broker tenant value. One active ticket is enforced by PostgreSQL. A delivery intent is the provider idempotency boundary; visible delivery state commits separately from the provider call so retryable failure cannot disappear with the job rollback. Only fixed error codes persist. Local SMTP/in-memory implementations are test transports; a production provider and authenticated callback adapter remain blocked by G-06.

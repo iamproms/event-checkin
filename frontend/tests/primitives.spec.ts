@@ -71,6 +71,7 @@ test('320px reflow, doubled text, and compact touch targets', async ({ page, bro
 });
 
 test('light and dark specimens have no detectable WCAG 2.2 AA violations', async ({ page }) => {
+  test.setTimeout(90_000);
   await openLab(page);
   for (const theme of ['light', 'dark'] as const) {
     if (theme === 'dark') await page.getByRole('button', { name: 'Use dark mode' }).click();

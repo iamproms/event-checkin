@@ -75,7 +75,7 @@ def auth_db() -> Iterator[AuthDatabase]:
         with owner.connect() as conn:
             assert (
                 conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0007_event_configuration"
+                == "0010_ticket_delivery"
             )
             for table in ("staff_invitations", "event_assignments"):
                 state = conn.execute(

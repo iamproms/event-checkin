@@ -7,20 +7,31 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
 from app.api.auth import router as auth_router
+from app.api.branding import router as branding_router
 from app.api.domains import router as domains_router
 from app.api.events import router as events_router
 from app.api.health import ReadinessResponse, health, readiness
 from app.api.platform import router as platform_router
+from app.api.registration import router as registration_router
+from app.api.tickets import router as tickets_router
 from app.auth.corpus import CompromisedPasswordCorpus
 from app.auth.email import DisabledEmailDelivery, SmtpEmailDelivery
 from app.auth.service import AuthService
+from app.branding.assets import BrandingStorage, S3BrandingStorage, UnavailableBrandingStorage
+from app.branding.service import BrandingService
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.engine import build_engine
 from app.events.service import EventService
-from app.tenancy.authority import AuthorityDenied, canonical_authority
+from app.registration.service import RegistrationService
+from app.registration.throttle import DenyRegistrationLimiter, RedisRegistrationLimiter
+from app.tenancy.authority import AuthorityDenied, canonical_authority, trusted_client_address
 from app.tenancy.domains import DisabledDomainProvider, DomainService, FixtureDomainProvider
 from app.tenancy.platform_auth import PlatformAuth
+from app.tickets.crypto import TicketKeyring, TicketKeyUnavailable
+from app.tickets.email import DisabledTicketTransport, LocalSmtpTicketTransport
+from app.tickets.service import TicketService
+from app.worker.storage import s3_storage
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -56,6 +67,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         if request.url.path.startswith("/api/"):
             try:
                 host, origin = canonical_authority(request, settings)
+                client_address = trusted_client_address(request, settings)
             except AuthorityDenied:
                 return JSONResponse(
                     status_code=421,
@@ -65,6 +77,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 )
             request.state.trusted_hostname = host
             request.state.trusted_origin = origin
+            request.state.client_address = client_address
         return await call_next(request)
 
     @app.middleware("http")
@@ -73,7 +86,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     ) -> Response:
         response = await call_next(request)
         if request.url.path.startswith(
-            ("/api/v1/auth", "/api/v1/platform", "/api/v1/domains", "/api/v1/events")
+            (
+                "/api/v1/auth",
+                "/api/v1/platform",
+                "/api/v1/domains",
+                "/api/v1/events",
+                "/api/v1/branding",
+                "/api/v1/public",
+            )
         ):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Referrer-Policy"] = "no-referrer"
@@ -83,11 +103,18 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(platform_router)
     app.include_router(domains_router)
     app.include_router(events_router)
+    app.include_router(branding_router)
+    app.include_router(registration_router)
+    app.include_router(tickets_router)
     app.state.auth_service = None
     app.state.platform_auth = None
     app.state.domain_service = None
     app.state.event_service = None
+    app.state.branding_service = None
+    app.state.registration_service = None
+    app.state.ticket_service = None
     app.state.email_delivery = DisabledEmailDelivery()
+    branding_storage: BrandingStorage = UnavailableBrandingStorage()
     if identity_engine is not None:
         email = (
             SmtpEmailDelivery(
@@ -108,6 +135,55 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         )
         app.state.email_delivery = email
         app.state.event_service = EventService(database_engine, app.state.auth_service)
+        branding_storage = (
+            S3BrandingStorage(s3_storage(settings))
+            if settings.storage_bucket
+            and settings.storage_access_key
+            and settings.storage_secret_key
+            else UnavailableBrandingStorage()
+        )
+        app.state.branding_service = BrandingService(
+            database_engine, app.state.auth_service, branding_storage
+        )
+    try:
+        ticket_keys = TicketKeyring.from_settings(settings)
+    except TicketKeyUnavailable:
+        ticket_keys = None
+    ticket_transport = (
+        LocalSmtpTicketTransport(
+            settings.email_smtp_host, settings.email_smtp_port, settings.email_from
+        )
+        if settings.app_env.value in {"local", "test"}
+        and settings.email_smtp_host
+        and settings.email_from
+        else DisabledTicketTransport()
+    )
+    if ticket_keys is not None:
+        app.state.ticket_service = TicketService(
+            database_engine,
+            app.state.auth_service,
+            ticket_keys,
+            ticket_transport,
+            branding_storage,
+        )
+    limiter = (
+        RedisRegistrationLimiter(
+            settings.redis_url.get_secret_value(),
+            settings.registration_rate_hmac_key.get_secret_value().encode("utf-8"),
+        )
+        if settings.redis_url and settings.registration_rate_hmac_key
+        else DenyRegistrationLimiter()
+    )
+    app.state.registration_service = RegistrationService(
+        database_engine,
+        limiter,
+        issuance_ready=(
+            ticket_keys is not None
+            and not isinstance(ticket_transport, DisabledTicketTransport)
+            and settings.redis_url is not None
+            and settings.ticket_issuance_enabled
+        ),
+    )
     if platform_engine is not None and identity_engine is not None:
         app.state.platform_auth = PlatformAuth(identity_engine, settings)
         if settings.fallback_domain_suffix is not None:

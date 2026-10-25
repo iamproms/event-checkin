@@ -13,4 +13,6 @@
 .management .domain-row .ui-status { margin-top: var(--space-3); }
 .management .proof { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface); }
 .management .muted { color: var(--text-muted); }
+.tenant-brand-mark { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.tenant-brand-mark__logo { display: block; width: auto; max-width: 96px; height: 32px; object-fit: contain; }
 @media (max-width: 360px) { .management { padding-inline: var(--space-3); } .management header { align-items: flex-start; flex-direction: column; } .management h1 { font: var(--type-subsection); } }

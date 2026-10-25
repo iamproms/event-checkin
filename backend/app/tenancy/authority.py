@@ -12,6 +12,44 @@ class AuthorityDenied(ValueError):
     pass
 
 
+def trusted_client_address(request: Request, settings: Settings) -> str:
+    """Use one edge-overwritten client address from an authenticated ingress peer."""
+    peer = request.scope.get("client")
+    if peer is None:
+        raise AuthorityDenied("Client address is unavailable")
+    forwarded = [
+        value
+        for key, value in request.scope.get("headers", [])
+        if key.lower() == b"x-forwarded-for"
+    ]
+    if settings.app_env in {Environment.LOCAL, Environment.TEST}:
+        if forwarded:
+            raise AuthorityDenied("Forwarded client address is not accepted")
+        if settings.app_env == Environment.TEST and peer[0] == "testclient":
+            return "127.0.0.1"
+        try:
+            return str(ip_address(peer[0]))
+        except ValueError as exc:
+            raise AuthorityDenied("Client address is unavailable") from exc
+    allowed = {
+        ip_address(item.strip()) for item in settings.ingress_proxy_ips.split(",") if item.strip()
+    }
+    try:
+        if ip_address(peer[0]) not in allowed:
+            raise AuthorityDenied("Ingress peer is not trusted")
+    except ValueError as exc:
+        raise AuthorityDenied("Ingress peer is not trusted") from exc
+    if len(forwarded) != 1:
+        raise AuthorityDenied("Trusted ingress client address is required")
+    try:
+        raw = forwarded[0].decode("ascii", "strict")
+        if "," in raw or raw != raw.strip():
+            raise ValueError("forward chain")
+        return str(ip_address(raw))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise AuthorityDenied("Trusted ingress client address is invalid") from exc
+
+
 def canonical_authority(request: Request, settings: Settings) -> tuple[str, str]:
     """Return normalized hostname and public origin, never a forwarded host.
 

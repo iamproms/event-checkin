@@ -1,8 +1,8 @@
 # Event Check-in Platform — Implementation Plan
 
-**Status:** Living roadmap; the M1-01 baseline and M1-02–M1-04 changes are merged, with M1-01 production/staging hardening still open. M1-05 is in progress.
+**Status:** Living roadmap; M1-02–M1-05, M2-01 and M2-03 are merged. M2-02 billing was reprioritized for the demo-critical path and remains incomplete. M1-01 production/staging hardening remains open. M2-04/M3-01/M3-02 have a provider-independent implementation pending review and activation gates.
 **Inputs:** [PRD review](PRD_REVIEW.md), [technical design](TECHNICAL_DESIGN.md), [database design](DATABASE_DESIGN.md), and the [Quiet Precision design-system study](DESIGN_SYSTEM.md).  
-**Decision baseline:** D-01–D-13 in the PRD review. The Quiet Precision foundation is approved by [G-07](DECISIONS/G-07_VISUAL_FOUNDATION.md); the initial [M0-02 state vocabulary v1](DECISIONS/M0-02_STATE_VOCABULARY_V1.md) covers only documented states. Feature-level states and tenant branding bounds remain open.
+**Decision baseline:** D-01–D-13 in the PRD review. The Quiet Precision foundation and tenant-brand contrast bounds are approved by [G-07](DECISIONS/G-07_VISUAL_FOUNDATION.md); the initial [M0-02 state vocabulary v1](DECISIONS/M0-02_STATE_VOCABULARY_V1.md) covers only documented states. Feature-level states remain owned by their milestones.
 **Planning unit:** Each task is independently reviewable and should be small enough for one pull request or a clearly identified short series of dependent pull requests. No dates or staffing estimates are asserted without team capacity and vendor lead-time information.
 
 ## 1. Delivery rules and scope
@@ -23,11 +23,11 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 |---|---|---|---|
 | G-01 Product contracts | Registration correction/replacement and on-site registration; event cancellation/reopening; metric definitions for deletion and no-show | M2-03, M3-01, M3-03, M4-04, M5-02 | Signed product-state and metric glossary; API examples |
 | G-02 Identity and gate policy | Staff authentication, MFA, session values, and initial least-privilege permissions approved in [G-02](DECISIONS/G-02_STAFF_IDENTITY.md); browser/device support, scanner label, and connectivity escalation remain for gate operations | M4-01, M4-03, M6-03; M1-03 production activation still needs approved password corpus and email provider | Approved decision record and remaining gate-operation policy |
-| G-03 QR policy | Signed non-PII QR with encrypted stored resend copy and TLS, or another explicitly approved confidentiality model | M3-02, M4-02 | QR threat model and key-management record |
-| G-04 Communications | Transactional/promotional purposes, consent/opt-out language, sender verification, SMS/WhatsApp provider and approved templates | M3-02, M5-01/04/05 | Messaging policy and vendor onboarding record |
+| G-03 QR policy | Approved opaque random online credential, keyed digest, authenticated-encrypted resend copy and versioned external keys; M4 owns atomic redemption | M4-02 | [Approved G-03 record](DECISIONS/G-03_QR_SECURITY_V1.md) |
+| G-04 Communications | Registration evidence and transactional ticket purpose approved; final privacy copy/lawful basis and production providers/senders remain gated | Real attendee activation; M5-01/04/05 | [Approved technical G-04 record](DECISIONS/G-04_REGISTRATION_MESSAGING_V1.md) and vendor onboarding record |
 | G-05 Commercial | Paystack plan prices, interval, trials, included usage, add-ons, tax, renewal/nonpayment policy | M2-02, M5-04/05 where channel charges apply, M6-03 | Plan catalog and entitlement state table |
 | G-06 Privacy and vendors | Region/cross-border processing, export artifact lifetime, deletion execution timing, suppression-retention basis, aggregate privacy threshold, backup expiry | M1-01, M2-01, M5-02/03/04/05, M6-02 | Data-lifecycle and vendor decision record |
-| G-07 Visual foundation | Approved Inter, warm-neutral, explicit light/dark, evergreen, comfortable/limited compact, 4/8 radius, neutral-fill navigation. Tenant brand bounds and feature layouts remain in their owning milestones. | M1-05 foundation is authorized; production branding still requires contrast review. | [Approved G-07 record](DECISIONS/G-07_VISUAL_FOUNDATION.md) |
+| G-07 Visual foundation | Approved Quiet Precision foundation plus M2-04 rendered light/dark contrast bounds; semantic and focus colors remain platform-controlled | Staging visual verification | [Approved G-07 record](DECISIONS/G-07_VISUAL_FOUNDATION.md) |
 
 **Working assumptions pending approval:** never interrupt a live scan because billing status changes; scanner shows result without attendee identity; admin-requested deletion is irreversible once executed; public duplicate-registration responses avoid account enumeration. These are proposals already identified in the design documents, not new approvals. A task may prepare interfaces and adapters while its gate remains open, but cannot claim production-ready behavior that depends on it.
 
@@ -130,6 +130,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 - **Definition of done:** Admin can configure a staging event and gates through reviewed API/UI with documented state semantics.
 
 #### M2-04 — Publish tenant branding safely
+- **Implementation status:** Provider-independent draft/preview/publish/restore, private raster logo storage, audit history and tenant-facing application implemented for review. Real staging storage/hostname evidence remains G-06-gated.
 - **Objective and scope:** Tenant logo/name, accent and sender display-name settings; asset validation/storage, light/dark contrast validation, preview and publish workflow. Sender-domain verification remains a separate messaging concern.
 - **Dependencies:** M2-01 tenant identity; M1-04 storage; M1-05 UI primitives; G-07 brand bounds.
 - **Acceptance criteria:** Tenant admins can publish permitted branding; invalid or low-contrast themes fail with actionable feedback; semantic success/warning/error colors stay platform-controlled; logo failure has a readable fallback.
@@ -139,6 +140,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 ### M3 — Registration and tickets
 
 #### M3-01 — Register attendees safely
+- **Implementation status:** Host-derived public registration, exact form/notice evidence, independent contact uniqueness, neutral duplicate handling, Redis throttling and transactional ticket intent implemented for review. Real attendee activation remains blocked until final notice/lawful-basis approval.
 - **Objective and scope:** Public registration on verified tenant domain with required name/email/phone, configurable fields, E.164 phone normalization, event-scoped independent uniqueness, consent evidence, privacy notice and safe public errors.
 - **Dependencies:** M2-01/03/04; M1-02/03/05; G-01 correction policy and G-04 consent language.
 - **Acceptance criteria:** Shared email or shared phone is rejected even when the other value differs; no automatic merge; public responses do not enumerate existing contacts; accepted registration creates exactly one active registration intent and delivery event.
@@ -146,6 +148,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 - **Definition of done:** End-to-end registration flow and API contract pass, with audit/consent evidence and clear delivery-help state.
 
 #### M3-02 — Issue, reissue, revoke and deliver tickets
+- **Implementation status:** Approved G-03 credential/key contract, idempotent issuance/delivery jobs, branded QR email and admin lifecycle APIs implemented with deterministic test/local transports. Production delivery remains blocked by provider, verified sender and data-region approval.
 - **Objective and scope:** Non-sequential QR credential generation, key rotation/versioning, encrypted stored resend copy, active-ticket uniqueness, resend/reissue/revoke commands, email template/PDF ticket if approved, transactional delivery worker and provider callbacks.
 - **Dependencies:** M3-01; M2-04; M1-04; G-03 QR policy; G-04 transactional email/sender policy.
 - **Acceptance criteria:** QR contains no personal fields; a revoked/reissued credential cannot redeem; resend keeps the same active credential; provider retries do not create new tickets or duplicate intentional sends; failed delivery has an admin recovery path.
@@ -263,7 +266,7 @@ A task closes only when its acceptance criteria are demonstrated; API/data contr
 | Requirement / decision | Planned tasks | Launch disposition |
 |---|---|---|
 | F-01/F-02/F-13/F-14; N-03/N-08; D-01 | M1-02/03/05, M2-01/02/03/04, M3-04, M6-03 | Multi-tenant, multi-event, branded custom-domain administration. |
-| F-03/F-05; N-01; D-03 | M0-02, M3-02, M4-02, M6-02 | Signed non-PII QR proposal, ticket lifecycle and online single use; G-03 approval needed. |
+| F-03/F-05; N-01; D-03 | M0-02, M3-02, M4-02, M6-02 | Approved opaque non-PII credential, ticket lifecycle and online single use; M4-02 owns atomic redemption. |
 | F-04; D-10 | M3-01/03/04 | Self and bulk registration with independently unique email/phone. |
 | F-07; N-05; D-04 | M1-03, M4-01/03, M6-03 | Assigned gate staff on supported personal/organizer devices. |
 | F-09/F-12; N-02/N-06; D-02/D-05/D-12 | M4-02/03/04, M6-01/02 | Confirmed online scan attempts, live metrics and approved service objectives. |

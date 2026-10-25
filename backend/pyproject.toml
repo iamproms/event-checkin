@@ -18,6 +18,8 @@ dependencies = [
   "celery[redis]>=5.4,<6",
   "boto3>=1.35,<2",
   "idna>=3.10,<4",
+  "qrcode[pil]>=8,<9",
+  "Pillow>=11,<13",
 ]
 
 [project.optional-dependencies]

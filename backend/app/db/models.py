@@ -143,12 +143,100 @@ class TenantBranding(Base):
         primary_key=True,
     )
     logo_object_key: Mapped[str | None] = mapped_column(Text)
+    display_name: Mapped[str | None] = mapped_column(Text)
+    published_version: Mapped[int | None] = mapped_column(Integer)
     primary_color: Mapped[str | None] = mapped_column(String(7))
     accent_color: Mapped[str | None] = mapped_column(String(7))
     sender_name: Mapped[str | None] = mapped_column(Text)
     sender_domain: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "published_version"],
+            ["tenant_branding_versions.tenant_id", "tenant_branding_versions.version"],
+            name="fk_tenant_branding_published_version",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+    )
+
+
+class TenantBrandingDraft(Base):
+    __tablename__ = "tenant_branding_drafts"
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("tenants.id"), primary_key=True
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    display_name: Mapped[str | None] = mapped_column(Text)
+    logo_object_key: Mapped[str | None] = mapped_column(Text)
+    primary_color: Mapped[str | None] = mapped_column(String(7))
+    accent_color: Mapped[str | None] = mapped_column(String(7))
+    sender_name: Mapped[str | None] = mapped_column(Text)
+    updated_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), nullable=False
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "updated_by"],
+            ["tenant_memberships.tenant_id", "tenant_memberships.user_id"],
+            name="fk_branding_draft_actor_member",
+        ),
+        CheckConstraint("revision >= 0", name="ck_branding_draft_revision"),
+    )
+
+
+class TenantBrandingVersion(Base):
+    __tablename__ = "tenant_branding_versions"
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("tenants.id"), primary_key=True
+    )
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    display_name: Mapped[str | None] = mapped_column(Text)
+    logo_object_key: Mapped[str | None] = mapped_column(Text)
+    primary_color: Mapped[str | None] = mapped_column(String(7))
+    accent_color: Mapped[str | None] = mapped_column(String(7))
+    sender_name: Mapped[str | None] = mapped_column(Text)
+    published_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), nullable=False
+    )
+    restored_from_version: Mapped[int | None] = mapped_column(Integer)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "published_by"],
+            ["tenant_memberships.tenant_id", "tenant_memberships.user_id"],
+            name="fk_branding_version_actor_member",
+        ),
+        CheckConstraint("version > 0", name="ck_branding_version_positive"),
+    )
+
+
+class TenantBrandingAudit(Base):
+    __tablename__ = "tenant_branding_audit"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
+    )
+    actor_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    action: Mapped[str] = mapped_column(String(48), nullable=False)
+    version: Mapped[int | None] = mapped_column(Integer)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), nullable=False
+    )
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "actor_user_id"],
+            ["tenant_memberships.tenant_id", "tenant_memberships.user_id"],
+            name="fk_branding_audit_actor_member",
+        ),
     )
 
 
@@ -376,6 +464,73 @@ class Registration(Base):
     )
 
 
+class RegistrationNoticeVersion(Base):
+    __tablename__ = "registration_notice_versions"
+    tenant_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("tenants.id"), primary_key=True
+    )
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    lawful_basis: Mapped[str] = mapped_column(Text, nullable=False)
+    sha256: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    __table_args__ = (
+        CheckConstraint("version > 0", name="ck_registration_notice_version"),
+        CheckConstraint("octet_length(sha256) = 32", name="ck_registration_notice_digest"),
+        CheckConstraint(
+            "length(btrim(body)) BETWEEN 1 AND 20000", name="ck_registration_notice_body"
+        ),
+        CheckConstraint(
+            "length(btrim(lawful_basis)) BETWEEN 1 AND 500",
+            name="ck_registration_notice_basis",
+        ),
+        Index(
+            "uq_registration_notice_active",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("active"),
+        ),
+    )
+
+
+class RegistrationConsent(Base):
+    __tablename__ = "registration_consents"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    registration_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    notice_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    notice_digest: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    lawful_basis: Mapped[str] = mapped_column(Text, nullable=False)
+    acknowledged_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    marketing_opt_in: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    source: Mapped[str] = mapped_column(String(16), nullable=False, server_default="self")
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "registration_id"],
+            ["registrations.tenant_id", "registrations.event_id", "registrations.id"],
+            name="fk_registration_consents_registration",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "notice_version"],
+            ["registration_notice_versions.tenant_id", "registration_notice_versions.version"],
+            name="fk_registration_consents_notice",
+        ),
+        UniqueConstraint(
+            "tenant_id", "event_id", "registration_id", name="uq_registration_consents_registration"
+        ),
+        CheckConstraint("octet_length(notice_digest) = 32", name="ck_registration_consents_digest"),
+        CheckConstraint("source = 'self'", name="ck_registration_consents_source"),
+    )
+
+
 class Ticket(Base):
     __tablename__ = "tickets"
     id: Mapped[UUID] = mapped_column(
@@ -412,6 +567,74 @@ class Ticket(Base):
             postgresql_where=text("status = 'active'"),
         ),
         Index("ix_tickets_event", "tenant_id", "event_id"),
+    )
+
+
+class TicketDeliveryIntent(Base):
+    __tablename__ = "ticket_delivery_intents"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    ticket_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    provider_message_id: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(48))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "ticket_id"],
+            ["tickets.tenant_id", "tickets.event_id", "tickets.id"],
+            name="fk_ticket_delivery_ticket",
+        ),
+        UniqueConstraint("tenant_id", "event_id", "id", name="uq_ticket_delivery_scope"),
+        UniqueConstraint("provider_message_id", name="uq_ticket_delivery_provider_id"),
+        CheckConstraint("kind IN ('issue','resend','reissue')", name="ck_ticket_delivery_kind"),
+        CheckConstraint(
+            "status IN ('queued','sending','sent','delivered','failed','bounced')",
+            name="ck_ticket_delivery_status",
+        ),
+        CheckConstraint("attempts >= 0", name="ck_ticket_delivery_attempts"),
+        Index("ix_ticket_delivery_ticket", "tenant_id", "event_id", "ticket_id", "created_at"),
+    )
+
+
+class TicketAudit(Base):
+    __tablename__ = "ticket_audit"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    ticket_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    actor_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    action: Mapped[str] = mapped_column(String(48), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    metadata_json: Mapped[dict[str, object]] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "ticket_id"],
+            ["tickets.tenant_id", "tickets.event_id", "tickets.id"],
+            name="fk_ticket_audit_ticket",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "actor_user_id"],
+            ["tenant_memberships.tenant_id", "tenant_memberships.user_id"],
+            name="fk_ticket_audit_actor_member",
+        ),
+        Index("ix_ticket_audit_scope", "tenant_id", "event_id", "ticket_id", "occurred_at"),
     )
 
 

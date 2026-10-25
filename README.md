@@ -1,10 +1,10 @@
 # Event Check-in Platform
 
-M2-03 event configuration: see [event API contracts](docs/M2-03_EVENT_API_CONTRACTS.md) and [local runbook](docs/M2-03_EVENT_RUNBOOK.md). The event interface is at `/events.html` on an authorized tenant host.
+M2-03 event configuration: see [event API contracts](docs/M2-03_EVENT_API_CONTRACTS.md) and [local runbook](docs/M2-03_EVENT_RUNBOOK.md). The event interface is at `/events.html` on an authorized tenant host. The combined provider-independent M2-04/M3-01/M3-02 foundation adds `/branding.html` and `/register.html?event={slug}`; see the [operations runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
 
 M1-01 foundation through M1-05 shared UI primitives and M2-01 tenant provisioning are merged. The API is FastAPI; the web workspace is React, TypeScript and Vite. Approved decisions D-01–D-13, [G-02](docs/DECISIONS/G-02_STAFF_IDENTITY.md), [G-07](docs/DECISIONS/G-07_VISUAL_FOUNDATION.md), and the [M1-04 decision record](docs/DECISIONS/M1-04_JOBS_FILES.md) govern this work.
 
-M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file routes. M2-03 adds event configuration; registration, QR, billing, and scanner features remain outside this milestone.
+M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file routes. M2-03 adds event configuration. M2-04/M3-01/M3-02 add reviewed branding, public registration and ticket-delivery foundations. M2-02 billing remains deferred; scanner redemption remains M4.
 
 ## Local startup
 
@@ -45,6 +45,11 @@ export AUTH_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 export EMAIL_SMTP_HOST=localhost
 export EMAIL_SMTP_PORT=1025
 export EMAIL_FROM=staff@local.example.test
+export REDIS_URL='redis://localhost:6380/0'
+export TICKET_KEYRING_JSON='{"1":"REPLACE_WITH_BASE64_32_BYTES"}'
+export TICKET_ACTIVE_KEY_VERSION=1
+export TICKET_ISSUANCE_ENABLED=true
+export REGISTRATION_RATE_HMAC_KEY="$(openssl rand -hex 32)"
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -75,7 +80,7 @@ The isolated M1-05 component examples are at `http://127.0.0.1:5173/ui-lab.html`
 
 ## Environment and migration policy
 
-`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. Production requires `sslmode=verify-full` for runtime, identity, job, and operator connections, plus a trusted database CA. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002_tenant_foundation`, `0003_staff_identity`, `0004_auth_session_invalidation`, `0005_reliable_jobs_storage`, and `0006_tenant_provisioning` add tenant isolation, staff identity, session invalidation, reliable-job/private-object primitives, and restricted tenant-domain control respectively. See [schema notes](docs/M1-02_SCHEMA_NOTES.md), [identity contracts](docs/M1-03_AUTH_CONTRACTS.md), [jobs runbook](docs/M1-04_JOBS_STORAGE_RUNBOOK.md), and [M2-01 runbook](docs/M2-01_PROVISIONING_RUNBOOK.md).
+`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. Production requires `sslmode=verify-full` for runtime, identity, job, and operator connections, plus a trusted database CA. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002`–`0010` cover tenant isolation, identity, reliable jobs/storage, domains, event configuration, branding, registration evidence and ticket delivery. `TICKET_KEYRING_JSON` and `REGISTRATION_RATE_HMAC_KEY` are secrets; generate independent remote values and never use the local fixture. See [schema notes](docs/M1-02_SCHEMA_NOTES.md), [identity contracts](docs/M1-03_AUTH_CONTRACTS.md), [jobs runbook](docs/M1-04_JOBS_STORAGE_RUNBOOK.md), [M2-01 runbook](docs/M2-01_PROVISIONING_RUNBOOK.md), and the [combined registration/ticket runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
 
 Run migrations as a **single release step before routing traffic to new code**. Back up first, review generated SQL and destructive operations, and rehearse on staging. Prefer a forward fix after a migration reaches production; downgrade only when explicitly reviewed as safe for existing data. The baseline and M1-02 migration can be upgraded and downgraded on an empty database; do not downgrade a populated database without a reviewed data plan.
 

@@ -80,7 +80,7 @@ def db() -> Iterator[JobDatabase]:
         owner = create_engine(url)
         with owner.connect() as conn:
             assert conn.scalar(text("SELECT version_num FROM alembic_version")) == (
-                "0007_event_configuration"
+                "0010_ticket_delivery"
             )
             for table in ("job_records", "outbox_events", "private_objects"):
                 assert conn.execute(

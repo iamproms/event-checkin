@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     email_smtp_host: str | None = None
     email_smtp_port: int = 1025
     email_from: str | None = None
+    ticket_keyring_json: SecretStr | None = None
+    ticket_active_key_version: int = 1
+    ticket_issuance_enabled: bool = False
+    registration_rate_hmac_key: SecretStr | None = None
     jobs_database_url: SecretStr | None = None
     dispatcher_database_url: SecretStr | None = None
     jobs_operator_database_url: SecretStr | None = None

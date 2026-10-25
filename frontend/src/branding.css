@@ -1,0 +1,25 @@
+@import './management.css';
+
+.branding-main { width: min(100%, 920px); }
+.branding-intro { max-width: 64ch; }
+.branding-fields { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.branding-fields .wide { grid-column: 1 / -1; }
+.branding-previews { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.branding-preview { min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-surface); padding: var(--space-6); }
+.branding-preview--light { background: #fff; color: #20231f; }
+.branding-preview--dark { background: #21231f; color: #f4f4f1; }
+.branding-preview h3 { margin: 0 0 var(--space-4); font: var(--type-component); }
+.branding-preview__identity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; margin-bottom: var(--space-4); }
+.branding-preview__identity strong { overflow-wrap: anywhere; }
+.branding-preview__logo { display: block; width: 64px; height: 64px; object-fit: contain; flex: none; }
+.branding-preview__action { display: inline-flex; align-items: center; min-height: 44px; padding: var(--space-2) var(--space-4); border: 1px solid currentColor; border-radius: var(--radius-control); font: var(--type-label); }
+.branding-preview__accent { border-left: 4px solid currentColor; padding-left: var(--space-3); margin-top: var(--space-4); font: var(--type-support); }
+.branding-file { display: grid; gap: var(--space-2); max-width: 440px; }
+.branding-file label { font: var(--type-label); }
+.branding-file input { width: 100%; min-height: 44px; }
+.branding-history { list-style: none; padding: 0; }
+.branding-history li { border-bottom: 1px solid var(--border-subtle); padding: var(--space-4) 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.branding-history p { margin: var(--space-1) 0; }
+.branding-confirm .ui-button { margin-right: var(--space-2); }
+@media (max-width: 620px) { .branding-fields, .branding-previews { grid-template-columns: 1fr; } }
+@media (max-width: 360px) { .branding-preview { padding: var(--space-4); } }
