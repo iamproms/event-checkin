@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Quiet Precision — design foundations laboratory</title>
+  <title>Quiet Operations — design system preview</title>
   <style>
     @font-face { font-family: "Inter Lab"; src: url("assets/fonts/InterVar.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
     @font-face { font-family: "Geist Lab"; src: url("assets/fonts/GeistLatin.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
@@ -121,6 +121,13 @@
     .field-error { margin-top: 5px; color: var(--danger-ink); font-size: 13px; }
     .input.invalid { border-color: var(--danger-ink); }
     .input.demo-focus { outline: 2px solid var(--focus); outline-offset: 3px; }
+    .password-wrap { position: relative; }
+    .password-wrap .input { padding-right: 70px; }
+    .password-toggle { position: absolute; inset: 5px 5px 5px auto; min-width: 56px; border: 0; border-radius: var(--control-radius); background: transparent; color: var(--accent); font-size: 13px; font-weight: 600; }
+    .progress { display: grid; gap: 7px; }
+    .progress-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+    .progress-head span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+    progress { width: 100%; height: 8px; accent-color: var(--accent); }
     .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .status { border: 1px solid currentColor; border-radius: var(--surface-radius); padding: 11px 13px; font-size: 14px; line-height: 20px; }
     .status strong { display: block; font-weight: 600; }
@@ -129,6 +136,15 @@
     .status.warning { background: var(--warning-bg); color: var(--warning-ink); }
     .status.danger { background: var(--danger-bg); color: var(--danger-ink); }
     .status.info { background: var(--info-bg); color: var(--info-ink); }
+    .screen-state-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .screen-state { min-height: 150px; display: grid; grid-template-columns: 4px minmax(0, 1fr); gap: 16px; align-content: center; padding: var(--inset); border: 1px solid var(--line); border-radius: var(--surface-radius); background: var(--surface); }
+    .screen-state-mark { width: 4px; height: 48px; border-radius: 2px; background: var(--muted); }
+    .screen-state.success .screen-state-mark { background: var(--success-ink); }
+    .screen-state.error .screen-state-mark { background: var(--danger-ink); }
+    .screen-state.soon .screen-state-mark { background: var(--warning-ink); }
+    .screen-state.restricted .screen-state-mark { background: var(--info-ink); }
+    .screen-state h3 { margin: 0; }
+    .screen-state p { margin-top: 3px; color: var(--muted); font-size: 14px; }
     .treatment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
     .treatment { border: 1px solid var(--line); border-radius: var(--surface-radius); padding: 12px; background: var(--surface); }
     .treatment h3 { font-size: 14px; margin: 0 0 8px; }
@@ -148,9 +164,9 @@
     .icon-item svg { flex: none; color: var(--muted); fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
     .icon-item span { overflow-wrap: anywhere; }
     .float-ground { padding: 20px; background: var(--subtle); border-radius: var(--surface-radius); }
-    .float-sample { width: min(240px, 100%); padding: 8px; border-radius: var(--surface-radius); background: var(--surface); box-shadow: 0 8px 24px rgb(25 30 25 / 12%); }
+    .float-sample { width: min(240px, 100%); padding: 8px; border-radius: var(--surface-radius); background: var(--surface); box-shadow: 0 4px 12px rgb(25 30 25 / 7%); }
     .float-sample div { padding: 7px 9px; font-size: 14px; }
-    :root[data-theme="dark"] .float-sample { box-shadow: 0 12px 28px rgb(0 0 0 / 38%); }
+    :root[data-theme="dark"] .float-sample { box-shadow: 0 6px 16px rgb(0 0 0 / 24%); }
     .motion-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 14px; }
     .motion-list div { border-top: 1px solid var(--line); padding-top: 7px; }
     .motion-list strong { display: block; font-weight: 600; }
@@ -177,12 +193,12 @@
       .specimen-grid { gap: 9px; }
       .section-head { display: block; }
       .section-head p { margin-top: 4px; }
-      .field-grid, .status-grid, .icon-list { grid-template-columns: 1fr; }
+      .field-grid, .status-grid, .screen-state-grid, .icon-list { grid-template-columns: 1fr; }
       .state-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .token-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 420px) {
-      .wrap { width: min(100% - 28px, 1120px); }
+      .wrap { width: min(100% - 36px, 1120px); }
       .surface-grid, .contrast-list, .scale-list, .state-list, .motion-list { grid-template-columns: 1fr; }
       .type-line { grid-template-columns: 72px 1fr; gap: 10px; }
     }
@@ -191,9 +207,9 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>Quiet Precision</h1>
-      <p class="intro">A focused laboratory for comparing the platform’s visual foundations. Choose a typeface, neutral foundation, theme, accent, density, and radius. Every specimen keeps the same content as the tokens change.</p>
-      <p class="review-state">Provisional design study · Local font files · Isolated specimens only</p>
+      <h1>Quiet Operations</h1>
+      <p class="intro">The implemented application foundation for Event Check-in. Compare its typography, neutral foundation, theme, accent, density, controls, and operational states with consistent content.</p>
+      <p class="review-state">Quiet Precision foundation · Framed operational composition · Local font files</p>
       <p class="font-health" id="font-health" role="status" aria-live="polite">Checking local font files…</p>
     </div>
   </header>
@@ -269,13 +285,26 @@
         <div class="state-cell"><span>Disabled</span><button class="button" type="button" disabled>Download report</button></div>
         <div class="state-cell"><span>Loading</span><button class="button" type="button" aria-busy="true" aria-disabled="true">Preparing report…</button></div>
       </div></div>
-      <div class="specimen-grid specimen"><div class="specimen-name">Inputs</div><div class="field-grid"><div><label class="field-label" for="email">Email address</label><input class="input" id="email" type="email" placeholder="name@example.com" autocomplete="off"><p class="field-note">Used to send the entry ticket.</p></div><div><label class="field-label" for="email-focus">Email address · focus treatment</label><input class="input demo-focus" id="email-focus" type="email" value="olade@example.org"><p class="field-note">Tab into either input to inspect real focus.</p></div><div><label class="field-label" for="email-error">Email address · validation error</label><input class="input invalid" id="email-error" type="email" value="name@" aria-invalid="true" aria-describedby="email-error-text"><p class="field-error" id="email-error-text">Enter a valid email address.</p></div></div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Inputs</div><div class="field-grid"><div><label class="field-label" for="email">Email address</label><input class="input" id="email" type="email" placeholder="name@example.com" autocomplete="off"><p class="field-note">Used to send the entry ticket.</p></div><div><label class="field-label" for="password">Password</label><div class="password-wrap"><input class="input" id="password" type="password" value="secure-password" autocomplete="current-password"><button class="password-toggle" type="button" aria-controls="password" aria-pressed="false">Show</button></div><p class="field-note">The visibility control preserves the value and focus.</p></div><div><label class="field-label" for="email-focus">Email address · focus treatment</label><input class="input demo-focus" id="email-focus" type="email" value="olade@example.org"><p class="field-note">Tab into either input to inspect real focus.</p></div><div><label class="field-label" for="email-error">Email address · validation error</label><input class="input invalid" id="email-error" type="email" value="name@" aria-invalid="true" aria-describedby="email-error-text"><p class="field-error" id="email-error-text">Enter a valid email address.</p></div></div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Long-running operation</div><div class="progress"><div class="progress-head"><span>Participant import</span><span>45%</span></div><progress max="100" value="45" aria-label="Participant import"></progress><p class="field-note">The operation remains visible until it completes or fails.</p></div></div>
     </section>
 
     <section class="section" aria-labelledby="status-title">
       <div class="section-head"><h2 id="status-title">Status language</h2><p>Semantic colors are independent of the accent and always carry text.</p></div>
       <div class="specimen-grid specimen"><div class="specimen-name">Four states</div><div class="status-grid"><div class="status success"><strong>Checked in</strong><p>Entry was confirmed by the server.</p></div><div class="status warning"><strong>Already checked in</strong><p>Ask a supervisor for help.</p></div><div class="status danger"><strong>Ticket not valid</strong><p>Check the event ticket.</p></div><div class="status info"><strong>Could not confirm</strong><p>Check connection and retry.</p></div></div></div>
       <div class="specimen-grid specimen"><div class="specimen-name">Accent distinction</div><div class="button-row"><button class="button" type="button">Confirm action</button><div class="status success"><strong>Checked in</strong><p>Server-confirmed result.</p></div></div></div>
+    </section>
+
+    <section class="section" aria-labelledby="screen-state-title">
+      <div class="section-head"><h2 id="screen-state-title">Operational screen states</h2><p>Each state explains the condition and the next available action without invented data.</p></div>
+      <div class="screen-state-grid">
+        <article class="screen-state"><span class="screen-state-mark" aria-hidden="true"></span><div><h3>No participants yet</h3><p>Import a participant file or open public registration.</p></div></article>
+        <article class="screen-state success"><span class="screen-state-mark" aria-hidden="true"></span><div><h3>Import completed</h3><p>The accepted registrations are available in the participant directory.</p></div></article>
+        <article class="screen-state error" role="alert"><span class="screen-state-mark" aria-hidden="true"></span><div><h3>Attendance unavailable</h3><p>Check the connection and try the request again.</p></div></article>
+        <article class="screen-state restricted"><span class="screen-state-mark" aria-hidden="true"></span><div><h3>Organizer permission required</h3><p>Ask an organization owner to update your role.</p></div></article>
+        <article class="screen-state soon"><span class="screen-state-mark" aria-hidden="true"></span><div><h3>Campaigns are coming soon</h3><p>Transactional ticket delivery remains available.</p></div></article>
+        <article class="screen-state"><span class="screen-state-mark" aria-hidden="true"></span><div><h3>Telemetry unavailable</h3><p>Live operational metrics require an authoritative monitoring endpoint.</p></div></article>
+      </div>
     </section>
 
     <section class="section" aria-labelledby="nav-title">
@@ -290,7 +319,7 @@
         <div class="icon-item"><svg width="16" height="16" viewBox="0 0 24 24" stroke-width="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>16px · navigation · 1.5px stroke</span></div>
         <div class="icon-item"><svg width="20" height="20" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>20px · touch action · 1.75px stroke</span></div>
       </div></div>
-      <div class="specimen-grid specimen"><div class="specimen-name">Floating surface</div><div class="float-ground"><div class="float-sample" role="img" aria-label="Floating menu surface with two rows and a soft shadow"><div>Download CSV</div><div>Download PDF</div></div></div></div>
+      <div class="specimen-grid specimen"><div class="specimen-name">Floating surface</div><div class="float-ground" data-ui><div class="float-sample" role="img" aria-label="Floating menu surface with two rows and a soft shadow"><div>Download CSV</div><div>Download PDF</div></div></div></div>
       <div class="specimen-grid specimen"><div class="specimen-name">Motion tokens</div><div class="motion-list"><div><strong>Frequent action</strong><span>Instant state change; no entrance motion.</span></div><div><strong>Pointer press</strong><span>120ms transform to 0.97 scale; removed for reduced motion.</span></div><div><strong>Occasional overlay</strong><span>180–220ms opacity/transform, strong ease-out; not animated in this sheet.</span></div><div><strong>Exit</strong><span>140–180ms opacity/transform; reduced motion removes translation.</span></div></div></div>
     </section>
 
@@ -300,11 +329,19 @@
     </section>
 
   </main>
-  <footer><div class="wrap">Provisional foundation study. Review the typography at real reading size and compare all light, dark, neutral, and accent combinations before approval. Font licenses: <a href="assets/fonts/INTER-OFL.txt">Inter</a> · <a href="assets/fonts/GEIST-OFL.txt">Geist</a>.</div></footer>
+  <footer><div class="wrap">Quiet Operations extends the approved Quiet Precision foundation. Review typography at real reading size and compare all light, dark, neutral, and accent combinations. Font licenses: <a href="assets/fonts/INTER-OFL.txt">Inter</a> · <a href="assets/fonts/GEIST-OFL.txt">Geist</a>.</div></footer>
   <script>
     const root = document.documentElement;
     document.addEventListener('keydown', () => { root.dataset.input = 'keyboard'; });
     document.addEventListener('pointerdown', () => { root.dataset.input = 'pointer'; });
+    document.querySelector('.password-toggle')?.addEventListener('click', event => {
+      const button = event.currentTarget;
+      const input = document.getElementById(button.getAttribute('aria-controls'));
+      const visible = input.type === 'text';
+      input.type = visible ? 'password' : 'text';
+      button.textContent = visible ? 'Show' : 'Hide';
+      button.setAttribute('aria-pressed', String(!visible));
+    });
     document.querySelectorAll('fieldset[data-setting]').forEach(group => {
       group.addEventListener('click', event => {
         const button = event.target.closest('button[data-value]');

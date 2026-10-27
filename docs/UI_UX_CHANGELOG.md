@@ -62,6 +62,28 @@ This file records the work completed on `feat/platform-ui-ux-overhaul`. Entries 
 
 - Inspected refreshed organizer desktop light, platform desktop dark, and gate mobile dark screenshots after the foundation changes.
 
+### Recovery completion
+
+- Replaced synthetic platform totals, charts, domains, job counts, delivery backlogs, and alerts with live readiness values or explicit unavailable states.
+- Added shared success and unavailable screen-state variants and exposed them in the UI laboratory and design-system preview.
+- Replaced the subscription placeholder controls with an honest Coming soon state and the administrator placeholder with a restricted state.
+- Routed scanner failures through the shared safe-error mapper so raw server payloads and parsing failures are not presented to gate staff.
+- Removed scanner spinner animation when reduced motion is requested.
+- Updated the Quiet Operations preview with password visibility, progress, and all operational screen-state specimens.
+- Reduced floating-surface shadows after browser inspection and retained flat base and grouped surfaces.
+
+### Phase 2 verification
+
+- TypeScript: passed.
+- ESLint: passed.
+- Token tests: passed, 2 tests.
+- Targeted Playwright interaction, accessibility, narrow-screen, platform, and scanner checks: passed, 7 tests.
+- Taste browser inspection of the design-system preview: 0 failures and 2 advisory warnings.
+- The remaining Taste warnings are expected for the approved warm-neutral canvas and the intentionally long component-reference page.
+- Desktop, tablet, and mobile preview captures were visually inspected; no clipping, unintended overlap, or horizontal overflow was observed.
+- Preserved a platform overview before capture and added updated platform and design-system captures under `docs/screenshots/` for review.
+- The interrupted organizer workflow edits remain outside the Phase 2 commits and are documented for Phase 3 review.
+
 ## Backend dependencies
 
 - Structured authentication lockout reason and retry metadata.

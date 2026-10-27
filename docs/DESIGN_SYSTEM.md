@@ -121,7 +121,7 @@ The laboratory uses the same labels, copy, and specimen order for every candidat
 
 Use one outline icon set. Candidate sizes: 14px inline cue, 16px navigation/action adjunct, 20px touch action. Candidate strokes: 1.5px at 14–16px, 1.75px at 20px. Icons are subordinate to labels, use current text color, and have accessible names when they are the sole affordance. Do not place routine icons in tinted discs or use an icon where a word is clearer. Status must still have text.
 
-Base and grouped surfaces have **no shadow**. A floating menu/popover may use `0 8px 24px rgb(25 30 25 / 12%)` in light mode; dark mode may use `0 12px 28px rgb(0 0 0 / 38%)`. A floating shadow is paired with a surface fill and no competing border. Dialogs may need a stronger scrim/edge separation after actual screen review. Elevation never communicates status by itself.
+Base and grouped surfaces have **no shadow**. A floating menu or popover may use `0 4px 12px rgb(25 30 25 / 7%)` in light mode; dark mode may use `0 6px 16px rgb(0 0 0 / 24%)`. A floating shadow is paired with a surface fill and no competing border. Dialogs may need a stronger scrim or edge separation after actual screen review. Elevation never communicates status by itself.
 
 | Motion token | Provisional value | Purpose and limit |
 |---|---|---|
