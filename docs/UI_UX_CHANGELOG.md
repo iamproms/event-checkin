@@ -34,7 +34,7 @@ This file records the work completed on `feat/platform-ui-ux-overhaul`. Entries 
 
 ### Approved scope
 
-- The implementation direction and all remaining phases were approved before visual implementation began.
+- The Quiet Operations direction and Phase 2 design-foundation work were approved before visual implementation began. Later phases require separate review and approval.
 
 ## 2026-10-27: Phase 2 design foundation
 
@@ -79,8 +79,10 @@ This file records the work completed on `feat/platform-ui-ux-overhaul`. Entries 
 - Token tests: passed, 2 tests.
 - Targeted Playwright interaction, accessibility, narrow-screen, platform, and scanner checks: passed, 7 tests.
 - Full Playwright suite against the committed Phase 2 snapshot: passed, 37 tests.
+- Taste source linter across `frontend/src`: 0 failures and 8 advisory warnings.
 - Taste browser inspection of the design-system preview: 0 failures and 2 advisory warnings.
 - The remaining Taste warnings are expected for the approved warm-neutral canvas and the intentionally long component-reference page.
+- Source advisories cover four functional overlay or selected-control shadows, two technical monospace uses, the existing public-registration section label, and eight em dashes reported as one copy warning.
 - Desktop, tablet, and mobile preview captures were visually inspected; no clipping, unintended overlap, or horizontal overflow was observed.
 - Preserved a platform overview before capture and added updated platform and design-system captures under `docs/screenshots/` for review.
 - Renamed the overview action to “Open provisioning” after the full suite identified an accessible-name collision with the Organizations navigation link.
