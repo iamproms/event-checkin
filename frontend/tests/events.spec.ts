@@ -24,6 +24,17 @@ test('event-local dates convert without device-zone or DST guessing', () => {
     instruction: 'Cancellation is final. This event cannot reopen.' });
 });
 
+test('event directory deep links open the selected event without changing API contracts', async ({ page }) => {
+  await page.route('**/api/v1/events', (route) => route.fulfill({ json: { events: [draft] } }));
+  await page.route('**/api/v1/events/*/gates', (route) => route.fulfill({ json: { gates: [] } }));
+  await page.route('**/api/v1/events/*/readiness', (route) => route.fulfill({ json: { ready: false, instructions: ['Enable at least one gate.'] } }));
+  await page.goto(`/events.html?event=${draft.id}`);
+  await expect(page.getByRole('heading', { name: draft.name })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`\\?event=${draft.id}$`));
+  await page.getByRole('button', { name: '← All events' }).click();
+  await expect(page).toHaveURL(/\/events\.html$/);
+});
+
 test('event configuration is readable, accessible and reflows at 320px and 200% text', async ({ page }) => {
   // Eight full Axe scans across two themes and four panels can be CPU-bound on
   // the single-worker Fedora validation host. Keep every scan, but give this

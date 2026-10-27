@@ -8,7 +8,7 @@ test('organizer workspace exposes every destination with honest capability label
   await page.route('**/api/v1/events/event-1/gates', route => route.fulfill({ json: { gates: [] } }));
   await page.route('**/api/v1/events/event-1/attendance', route => route.fulfill({ json: { event_id: 'event-1', registered: 0, checked_in: 0, remaining: 0, attendance_percent: 0, duplicate_scans: 0, invalid_scans: 0, refreshed_at: '2026-10-26T10:00:00Z', gates: [], recent: [] } }));
   await page.goto('/workspace.html');
-  await expect(page.getByRole('heading', { name: 'Live attendance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   const routes: Array<[string, string]> = [
     ['Events', 'Events'], ['Participants', 'Participants'], ['Tickets', 'Tickets'],
     ['Check-in', 'Live attendance'], ['Communications', 'Communications'],
@@ -39,6 +39,65 @@ test('selected event is validated in the URL and persists across workspace route
   await expect(page.getByText('Operations Forum', { exact: true }).first()).toBeVisible();
   await page.reload();
   await expect(page.getByRole('combobox', { name: 'Event' }).first().locator('option:checked')).toHaveText('Operations Forum');
+});
+
+test('ticket operations use participant context and shared confirmation dialogs', async ({ page }) => {
+  const event = { id: 'event-1', slug: 'summit', name: 'Innovation Summit 2026', status: 'published', starts_at: '2026-11-01T08:00:00Z', ends_at: '2026-11-01T18:00:00Z', revision: 1 };
+  const participant = { id: 'registration-1', full_name: 'Ada Okafor', email: 'ada@example.test', phone: null, status: 'registered', source: 'import', registered_at: '2026-10-26T10:00:00Z', ticket_status: 'active', delivery_status: 'sent' };
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
+  await page.route('**/api/v1/events', route => route.fulfill({ json: { events: [event] } }));
+  await page.route('**/api/v1/events/event-1/registrations**', route => route.fulfill({ json: { registrations: [participant], next_cursor: null } }));
+  await page.route('**/api/v1/events/event-1/tickets/bulk', route => route.fulfill({ json: { registered: 1, issued: 1, queued: 0, sent: 1, delivered: 0, failed: 0 } }));
+  await page.route('**/api/v1/events/event-1/registrations/registration-1/ticket', route => route.fulfill({ json: { ticket_status: 'active', delivery_status: 'sent' } }));
+  await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
+  await page.route('**/api/v1/events/event-1/registrations/registration-1/ticket/revoke', route => route.fulfill({ json: { ticket_status: 'revoked', delivery_status: 'sent' } }));
+  await page.goto('/workspace.html#tickets?event=event-1');
+  await page.getByRole('button', { name: 'Manage' }).click();
+  await expect(page.getByRole('heading', { name: "Ada Okafor's ticket" })).toBeVisible();
+  await page.getByRole('button', { name: 'Revoke', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Revoke this ticket?' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Revoke ticket' }).click();
+  await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
+  await expect(page.getByText('registration-1')).not.toBeVisible();
+  await page.getByText('Support identifiers').click();
+  await expect(page.getByText('registration-1')).toBeVisible();
+});
+
+test('gate staff assignment changes use the shared accessible dialog', async ({ page }) => {
+  const event = { id: 'event-1', slug: 'summit', name: 'Innovation Summit 2026', status: 'published', starts_at: '2026-11-01T08:00:00Z', ends_at: '2026-11-01T18:00:00Z', revision: 1 };
+  const staff = { user_id: 'staff-1', email: 'scanner@example.test', role: 'gate_scanner', status: 'active', assignments: [{ event_id: 'event-1', gate_id: 'gate-1' }] };
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
+  await page.route('**/api/v1/events', route => route.fulfill({ json: { events: [event] } }));
+  await page.route('**/api/v1/events/event-1/gates', route => route.fulfill({ json: { gates: [{ id: 'gate-1', event_id: 'event-1', name: 'Main hall', enabled: true }] } }));
+  await page.route('**/api/v1/auth/gate-staff', route => route.fulfill({ json: { staff: [staff] } }));
+  await page.goto('/workspace.html#gate-staff?event=event-1');
+  const move = page.getByRole('button', { name: 'Move', exact: true });
+  await move.click();
+  await expect(page.getByRole('dialog', { name: 'Move gate assignment?' })).toContainText('Innovation Summit 2026');
+  await page.keyboard.press('Escape');
+  await expect(move).toBeFocused();
+});
+
+test('core organizer workflows reflow at 320px and pass automated accessibility checks', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium');
+  test.setTimeout(90_000);
+  const event = { id: 'event-1', slug: 'summit', name: 'Innovation Summit 2026', status: 'published', starts_at: '2026-11-01T08:00:00Z', ends_at: '2026-11-01T18:00:00Z', revision: 1 };
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
+  await page.route('**/api/v1/events', route => route.fulfill({ json: { events: [event] } }));
+  await page.route('**/api/v1/events/event-1/registrations**', route => route.fulfill({ json: { registrations: [], next_cursor: null } }));
+  await page.route('**/api/v1/events/event-1/tickets/bulk', route => route.fulfill({ json: { registered: 0, issued: 0, queued: 0, sent: 0, delivered: 0, failed: 0 } }));
+  await page.route('**/api/v1/events/event-1/attendance', route => route.fulfill({ json: { event_id: 'event-1', registered: 0, checked_in: 0, remaining: 0, attendance_percent: 0, duplicate_scans: 0, invalid_scans: 0, refreshed_at: '2026-10-26T10:00:00Z', gates: [], recent: [] } }));
+  await page.route('**/api/v1/events/event-1/gates', route => route.fulfill({ json: { gates: [] } }));
+  await page.route('**/api/v1/auth/gate-staff', route => route.fulfill({ json: { staff: [] } }));
+  await page.setViewportSize({ width: 320, height: 760 });
+  for (const path of ['participants', 'tickets', 'check-in', 'gate-staff']) {
+    await page.goto(`/workspace.html#${path}?event=event-1`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), path).toBeLessThanOrEqual(320);
+    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze();
+    expect(results.violations, path).toEqual([]);
+  }
 });
 
 test('gate staff are directed away from the organizer workspace', async ({ page }) => {
@@ -149,7 +208,7 @@ test('bulk import maps published custom fields and sends the approved policy to 
   await page.route('**/api/v1/events/event-1/imports/import-1/validate', async route => {
     const body = route.request().postDataJSON();
     expect(body).toEqual({ mapping: { full_name: 'full_name', email: 'email', phone: 'phone', custom: { meal: 'meal' } }, notice_version: 1, lawful_basis: 'test-basis' });
-    await route.fulfill({ json: { import_id: 'import-1', status: 'validated', row_count: 1, valid_count: 1, invalid_count: 0, duplicate_count: 0, imported_count: 0, progress: 0, errors: [] } });
+    await route.fulfill({ json: { import_id: 'import-1', status: 'validated', row_count: 2, valid_count: 1, invalid_count: 1, duplicate_count: 0, imported_count: 0, progress: 0, errors: [{ row_number: 2, errors: ['INVALID_EMAIL'] }] } });
   });
   await page.goto('/workspace.html#participants');
   await page.getByRole('tab', { name: 'Bulk import' }).click();
@@ -159,6 +218,8 @@ test('bulk import maps published custom fields and sends the approved policy to 
   await page.getByLabel('Approved lawful basis').fill('test-basis');
   await page.getByRole('button', { name: 'Validate rows' }).click();
   await expect(page.getByText('Eligible to create')).toBeVisible();
+  await expect(page.getByText('Enter a valid email address.')).toBeVisible();
+  await expect(page.getByText('INVALID_EMAIL')).toHaveCount(0);
 });
 
 test('bulk import accepts a CSV containing only an email column', async ({ page }) => {
@@ -238,7 +299,7 @@ test('representative product screens reflow and pass automated accessibility che
   await page.route('**/ready', route => route.fulfill({ json: { status: 'ready', checks: { api: 'ready', database: 'ready', worker: 'not_configured' } } }));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/workspace.html#dashboard');
-  await expect(page.getByText('Confirmed redemptions')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Next actions' })).toBeVisible();
   const organizerShot = `${screenshotDir}/organizer-desktop-light.png`;
   await page.screenshot({ path: organizerShot, fullPage: true, animations: 'disabled' });
   await testInfo.attach('organizer-desktop-light', { path: organizerShot, contentType: 'image/png' });
