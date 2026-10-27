@@ -10,7 +10,7 @@ import './product/product.css';
 
 function Organizations() {
   type Created = { organization_id: string; organizer_email: string; invitation_delivery_status: string; event_setup_name: string };
-  type PlatformSession = { email: string; permission: string };
+  type PlatformSession = { email: string; permission?: string };
   const [authorized, setAuthorized] = useState(false);
   const [checked, setChecked] = useState(false);
   const [session, setSession] = useState<PlatformSession | null>(null);
@@ -39,7 +39,7 @@ function Organizations() {
           <Field label="First event name" hint="Optional. The organizer sets schedule and publication later." maxLength={200} value={eventName} onChange={event => setEventName(event.target.value)} />
           <Button type="submit" loading={busy} loadingText="Creating organization…">Create and invite organizer</Button>
         </form>}
-        {session && <p className="control-note">Authorized as {session.email} · {session.permission.replace('.', ' ')}</p>}
+        {session && <p className="control-note">Authorized as {session.email} · {(session.permission || 'tenant.provision').replace('.', ' ')}</p>}
         {error && <Status tone="danger" title="Organization action failed" instruction={error} announce="assertive" />}
       </section>
       <aside><CapabilityNotice capability={capabilities.platformOrganizationDirectory}/><UnavailableState title="Organization directory is unavailable" description="The current platform API can create organizations and resend their initial invitation, but it cannot list or retrieve organization records. No totals, rows, or detail values are estimated." /></aside>
