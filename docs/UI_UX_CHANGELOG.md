@@ -78,10 +78,12 @@ This file records the work completed on `feat/platform-ui-ux-overhaul`. Entries 
 - ESLint: passed.
 - Token tests: passed, 2 tests.
 - Targeted Playwright interaction, accessibility, narrow-screen, platform, and scanner checks: passed, 7 tests.
+- Full Playwright suite against the committed Phase 2 snapshot: passed, 37 tests.
 - Taste browser inspection of the design-system preview: 0 failures and 2 advisory warnings.
 - The remaining Taste warnings are expected for the approved warm-neutral canvas and the intentionally long component-reference page.
 - Desktop, tablet, and mobile preview captures were visually inspected; no clipping, unintended overlap, or horizontal overflow was observed.
 - Preserved a platform overview before capture and added updated platform and design-system captures under `docs/screenshots/` for review.
+- Renamed the overview action to “Open provisioning” after the full suite identified an accessible-name collision with the Organizations navigation link.
 - The interrupted organizer workflow edits remain outside the Phase 2 commits and are documented for Phase 3 review.
 
 ## Backend dependencies
