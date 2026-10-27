@@ -17,6 +17,7 @@ button, input { font: inherit; }
 .stack { display: grid; gap: var(--space-4); min-width: 0; }
 .stack > .ui-button--primary, .stack > .ui-button--secondary { width: 100%; }
 .tenant-switch { display: grid; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border-subtle); }
+.workspace-link { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 8px 14px; border-radius: var(--radius-control); background: var(--action); color: var(--action-text); font-weight: 600; text-decoration: none; }
 .key, .recovery-codes {
   margin: 0;
   padding: var(--space-3);

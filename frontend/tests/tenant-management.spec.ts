@@ -10,9 +10,12 @@ const domain = {
 
 async function checkLayouts(page: Page) {
   for (const theme of ['light', 'dark'] as const) {
-    if (theme === 'dark') await page.getByRole('button', { name: 'Use dark theme' }).click();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByLabel('Theme preference').selectOption(theme);
     await page.setViewportSize({ width: 320, height: 740 });
+    await expect(page.getByLabel('Theme preference')).toBeVisible();
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await expect(page.getByLabel('Theme preference')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze();
     expect(results.violations).toEqual([]);
@@ -45,6 +48,7 @@ test('platform page keeps MFA required and exposes review actions after an autho
   await page.route('**/api/v1/platform/tenants/*/domains', (route) =>
     route.fulfill({ json: { domains: [domain] } }));
   await page.goto('/platform.html');
+  await page.getByRole('link', { name: 'Organizations' }).click();
   await page.getByRole('textbox', { name: 'Tenant ID' }).fill('c1526557-cdf0-49b8-89a0-3516ab47ab41');
   await page.getByRole('button', { name: 'Load domains' }).click();
   await expect(page.getByText('Awaiting activation')).toBeVisible();
@@ -63,7 +67,7 @@ test('platform sign-in does not expose provisioning before MFA', async ({ page }
   await page.getByLabel('Password').fill('fixture-password');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Verify your identity' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Reserve tenant' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reserve organization' })).toHaveCount(0);
 });
 
 test('owner invitation reissue requires confirmation and clears stale data on revocation', async ({ page }) => {
@@ -78,6 +82,7 @@ test('owner invitation reissue requires confirmation and clears stale data on re
       json: { detail: { code: 'AUTH_DENIED', message: 'Authentication required' } } });
   });
   await page.goto('/platform.html');
+  await page.getByRole('link', { name: 'Organizations' }).click();
   await page.getByRole('textbox', { name: 'Tenant ID' }).fill('c1526557-cdf0-49b8-89a0-3516ab47ab41');
   await page.getByRole('button', { name: 'Reissue pending invitation' }).click();
   await expect(page.getByRole('dialog', { name: 'Reissue owner invitation' })).toBeVisible();
@@ -86,7 +91,7 @@ test('owner invitation reissue requires confirmation and clears stale data on re
   expect(reissues).toBe(0);
   await page.getByRole('button', { name: 'Reissue pending invitation' }).click();
   await page.getByRole('button', { name: 'Revoke and reissue' }).click();
-  await expect(page.getByRole('button', { name: 'Reserve tenant' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reserve organization' })).toHaveCount(0);
   await expect(page.getByText('Your platform session is unavailable. Sign in again.')).toBeVisible();
   expect(reissues).toBe(1);
 });

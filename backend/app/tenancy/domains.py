@@ -161,9 +161,13 @@ def queue_reconcile(db: Session, domain: TenantDomain) -> UUID:
 
 def schedule_due_reconciliations(control_engine: Engine, limit: int = 50) -> int:
     """Recover from missed timers without Redis being the source of truth."""
-    with Session(control_engine) as db, db.begin():
-        due = list(
-            db.scalars(
+    scheduled = 0
+    # The deferred job/outbox constraint runs at commit under the current
+    # transaction tenant context. Commit each domain separately so a batch
+    # containing multiple tenants cannot hide earlier outbox rows through RLS.
+    for _ in range(limit):
+        with Session(control_engine) as db, db.begin():
+            domain = db.scalar(
                 select(TenantDomain)
                 .where(
                     TenantDomain.next_reconcile_at <= now(),
@@ -171,15 +175,16 @@ def schedule_due_reconciliations(control_engine: Engine, limit: int = 50) -> int
                 )
                 .order_by(TenantDomain.next_reconcile_at)
                 .with_for_update(skip_locked=True)
-                .limit(limit)
+                .limit(1)
             )
-        )
-        for domain in due:
+            if domain is None:
+                break
             db.execute(
                 text("SELECT set_config('app.tenant_id', :id, true)"), {"id": str(domain.tenant_id)}
             )
             queue_reconcile(db, domain)
-        return len(due)
+            scheduled += 1
+    return scheduled
 
 
 class DomainService:

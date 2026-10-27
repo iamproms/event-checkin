@@ -27,13 +27,15 @@ test('labels, errors, semantic status and control states are exposed', async ({ 
   await expect(page.getByRole('progressbar', { name: 'Import preview' })).toHaveAttribute('value', '45');
 });
 
-test('theme is explicit, locally persisted, and independent of OS preference', async ({ page }) => {
+test('theme follows system until an explicit choice is persisted', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await openLab(page);
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await page.getByRole('button', { name: 'Use dark mode' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByLabel('Theme preference').selectOption('light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByLabel('Theme preference').selectOption('system');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
@@ -74,7 +76,7 @@ test('light and dark specimens have no detectable WCAG 2.2 AA violations', async
   test.setTimeout(90_000);
   await openLab(page);
   for (const theme of ['light', 'dark'] as const) {
-    if (theme === 'dark') await page.getByRole('button', { name: 'Use dark mode' }).click();
+    await page.getByLabel('Theme preference').selectOption(theme);
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze();
     expect(results.violations).toEqual([]);
   }
@@ -99,7 +101,7 @@ test('rendered theme pixels and component geometry match approved tokens', async
   }
   expect(await sampleCanvas()).toBe('f7f6f3');
   expect((await page.getByRole('button', { name: 'Continue', exact: true }).first().boundingBox())?.height).toBe(44);
-  await page.getByRole('button', { name: 'Use dark mode' }).click();
+  await page.getByLabel('Theme preference').selectOption('dark');
   await page.getByRole('button', { name: 'Use compact density' }).click();
   expect(await sampleCanvas()).toBe('171816');
   const geometry = await page.getByRole('button', { name: 'Continue', exact: true }).first().evaluate((button) => ({
@@ -116,7 +118,7 @@ test('rendered theme pixels and component geometry match approved tokens', async
 test('published text, control, focus and status token pairs meet contrast minima', async ({ page }) => {
   await openLab(page);
   for (const theme of ['light', 'dark'] as const) {
-    if (theme === 'dark') await page.getByRole('button', { name: 'Use dark mode' }).click();
+    await page.getByLabel('Theme preference').selectOption(theme);
     const ratios = await page.evaluate(() => {
       const css = getComputedStyle(document.documentElement);
       const channel = (part: string) => { const n = parseInt(part, 16) / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; };

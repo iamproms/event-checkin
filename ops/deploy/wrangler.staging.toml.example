@@ -1,0 +1,13 @@
+name = "event-checkin-staging-ingress"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+# Replace only after an owned staging zone and provider terms are approved.
+routes = [
+  { pattern = "platform.events.staging.example.test/*", zone_name = "staging.example.test" },
+  { pattern = "*.events.staging.example.test/*", zone_name = "staging.example.test" },
+]
+
+[vars]
+RENDER_ORIGIN_HOST = "REPLACE_WITH_RENDER_ORIGIN_HOST"

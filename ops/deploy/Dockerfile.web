@@ -1,0 +1,30 @@
+FROM node:22-alpine AS web-build
+WORKDIR /src/frontend
+COPY frontend/package.json ./
+RUN npm install --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+FROM caddy:2.10.2-alpine AS caddy
+
+FROM python:3.13-slim
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=10000
+COPY backend/pyproject.toml ./
+COPY backend/app ./app
+COPY backend/alembic.ini ./
+COPY backend/alembic ./alembic
+RUN pip install --no-cache-dir . \
+    && useradd --system --uid 10001 --create-home appuser \
+    && mkdir -p /srv/web \
+    && chown -R appuser:appuser /srv/web /app
+COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+COPY --from=web-build /src/frontend/dist/ /srv/web/
+COPY ops/deploy/Caddyfile /etc/caddy/Caddyfile
+COPY ops/deploy/start-web.sh /usr/local/bin/start-web
+RUN chmod 0555 /usr/local/bin/start-web
+USER 10001
+EXPOSE 10000
+CMD ["start-web"]

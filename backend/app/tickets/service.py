@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,8 @@ from app.db.models import (
     Event,
     JobRecord,
     Registration,
+    RegistrationConsent,
+    RegistrationNoticeVersion,
     TenantBranding,
     Ticket,
     TicketAudit,
@@ -116,7 +118,13 @@ class TicketService:
         return tenant_id, actor.id
 
     def _new_ticket(
-        self, db: Session, registration: Registration, actor: UUID | None, kind: str
+        self,
+        db: Session,
+        registration: Registration,
+        actor: UUID | None,
+        kind: str,
+        *,
+        queue_delivery: bool = True,
     ) -> Ticket:
         credential, version = self.keys.new_credential()
         digest = self.keys.digest(credential)
@@ -142,7 +150,8 @@ class TicketService:
         db.add(ticket)
         db.flush()
         _audit(db, ticket, f"ticket.{kind}", actor)
-        _queue_delivery(db, ticket, kind)
+        if queue_delivery:
+            _queue_delivery(db, ticket, kind)
         return ticket
 
     def issue_job(self, db: Session, job: JobRecord) -> None:
@@ -159,7 +168,197 @@ class TicketService:
         )
         if event is None or event.status != "published":
             raise TicketDenied("Event is unavailable")
-        self._new_ticket(db, registration, None, "issue")
+        self._new_ticket(
+            db,
+            registration,
+            None,
+            "issue",
+            queue_delivery=not (
+                event.registration_mode == "import_only" and registration.source == "bulk"
+            ),
+        )
+
+    def issue_bulk(self, host: str, session_token: str, event_id: UUID) -> dict[str, int]:
+        """Queue idempotent per-registration work; no QR creation in the request."""
+        tenant_id, _ = self._scope(host, session_token, event_id)
+        with authorized_tenant_session(self.engine, tenant_id) as db:
+            event = db.scalar(select(Event).where(Event.id == event_id))
+            if event is None or event.status != "published":
+                raise TicketDenied("Publish the event before issuing tickets")
+            ids = list(
+                db.scalars(
+                    select(Registration.id)
+                    .where(
+                        Registration.event_id == event_id,
+                        Registration.status == "registered",
+                        Registration.source == "bulk",
+                        Registration.deleted_at.is_(None),
+                    )
+                    .order_by(Registration.id)
+                )
+            )
+            for registration_id in ids:
+                enqueue_job(
+                    db,
+                    tenant_id=tenant_id,
+                    event_id=event_id,
+                    job_type="ticket.issue",
+                    idempotency_key=registration_id,
+                )
+            return {"eligible": len(ids), "queued_or_existing": len(ids)}
+
+    def send_bulk(self, host: str, session_token: str, event_id: UUID) -> dict[str, int]:
+        """One initial delivery intent per issued imported ticket, safely repeatable."""
+        if isinstance(self.transport, DisabledTicketTransport):
+            raise TicketDenied("Approved transactional ticket delivery is not configured")
+        tenant_id, actor = self._scope(host, session_token, event_id)
+        with authorized_tenant_session(self.engine, tenant_id) as db:
+            event = db.scalar(select(Event).where(Event.id == event_id))
+            if event is None or event.status != "published":
+                raise TicketDenied("Publish the event before sending tickets")
+            tickets = list(
+                db.scalars(
+                    select(Ticket)
+                    .join(
+                        Registration,
+                        (Registration.tenant_id == Ticket.tenant_id)
+                        & (Registration.event_id == Ticket.event_id)
+                        & (Registration.id == Ticket.registration_id),
+                    )
+                    .join(
+                        RegistrationConsent,
+                        (RegistrationConsent.tenant_id == Registration.tenant_id)
+                        & (RegistrationConsent.event_id == Registration.event_id)
+                        & (RegistrationConsent.registration_id == Registration.id),
+                    )
+                    .join(
+                        RegistrationNoticeVersion,
+                        (RegistrationNoticeVersion.tenant_id == RegistrationConsent.tenant_id)
+                        & (RegistrationNoticeVersion.version == RegistrationConsent.notice_version)
+                        & (RegistrationNoticeVersion.sha256 == RegistrationConsent.notice_digest)
+                        & (
+                            RegistrationNoticeVersion.lawful_basis
+                            == RegistrationConsent.lawful_basis
+                        ),
+                    )
+                    .where(
+                        Ticket.event_id == event_id,
+                        Ticket.status == "active",
+                        Registration.status == "registered",
+                        Registration.source == "bulk",
+                        Registration.deleted_at.is_(None),
+                        RegistrationNoticeVersion.active.is_(True),
+                        RegistrationNoticeVersion.approved_at.is_not(None),
+                    )
+                    .order_by(Ticket.id)
+                    .with_for_update(of=Ticket)
+                )
+            )
+            all_imported_tickets = (
+                db.scalar(
+                    select(func.count(Ticket.id))
+                    .join(
+                        Registration,
+                        (Registration.tenant_id == Ticket.tenant_id)
+                        & (Registration.event_id == Ticket.event_id)
+                        & (Registration.id == Ticket.registration_id),
+                    )
+                    .where(
+                        Ticket.event_id == event_id,
+                        Ticket.status == "active",
+                        Registration.status == "registered",
+                        Registration.source == "bulk",
+                        Registration.deleted_at.is_(None),
+                    )
+                )
+                or 0
+            )
+            if len(tickets) != all_imported_tickets:
+                raise TicketDenied("Approved import notice evidence is required before sending")
+            queued = 0
+            for ticket in tickets:
+                existing = db.scalar(
+                    select(TicketDeliveryIntent.id)
+                    .where(
+                        TicketDeliveryIntent.tenant_id == tenant_id,
+                        TicketDeliveryIntent.event_id == event_id,
+                        TicketDeliveryIntent.ticket_id == ticket.id,
+                    )
+                    .limit(1)
+                )
+                if existing is None:
+                    _queue_delivery(db, ticket, "issue")
+                    _audit(db, ticket, "ticket.bulk_send_requested", actor)
+                    queued += 1
+            return {"issued": len(tickets), "newly_queued": queued}
+
+    def bulk_status(self, host: str, session_token: str, event_id: UUID) -> dict[str, int]:
+        tenant_id, _ = self._scope(host, session_token, event_id)
+        with authorized_tenant_session(self.engine, tenant_id) as db:
+            registrations = (
+                db.scalar(
+                    select(func.count(Registration.id)).where(
+                        Registration.event_id == event_id,
+                        Registration.source == "bulk",
+                        Registration.status == "registered",
+                        Registration.deleted_at.is_(None),
+                    )
+                )
+                or 0
+            )
+            issued = (
+                db.scalar(
+                    select(func.count(Ticket.id))
+                    .join(
+                        Registration,
+                        (Registration.tenant_id == Ticket.tenant_id)
+                        & (Registration.event_id == Ticket.event_id)
+                        & (Registration.id == Ticket.registration_id),
+                    )
+                    .where(
+                        Ticket.event_id == event_id,
+                        Ticket.status == "active",
+                        Registration.source == "bulk",
+                    )
+                )
+                or 0
+            )
+            delivery_rows = db.execute(
+                select(
+                    TicketDeliveryIntent.status,
+                    func.count(TicketDeliveryIntent.id),
+                )
+                .join(
+                    Ticket,
+                    (Ticket.tenant_id == TicketDeliveryIntent.tenant_id)
+                    & (Ticket.event_id == TicketDeliveryIntent.event_id)
+                    & (Ticket.id == TicketDeliveryIntent.ticket_id),
+                )
+                .join(
+                    Registration,
+                    (Registration.tenant_id == Ticket.tenant_id)
+                    & (Registration.event_id == Ticket.event_id)
+                    & (Registration.id == Ticket.registration_id),
+                )
+                .where(
+                    TicketDeliveryIntent.event_id == event_id,
+                    Ticket.status == "active",
+                    Registration.source == "bulk",
+                )
+                .group_by(TicketDeliveryIntent.status)
+            ).all()
+            result = {
+                "registered": registrations,
+                "issued": issued,
+                "queued": 0,
+                "sent": 0,
+                "delivered": 0,
+                "failed": 0,
+            }
+            for state, count in delivery_rows:
+                if state in result:
+                    result[state] = count
+            return result
 
     def deliver_job(self, _db: Session, job: JobRecord) -> None:
         if job.event_id is None:
@@ -220,6 +419,33 @@ class TicketService:
                 intent.error_code = "RECIPIENT_UNAVAILABLE"
                 intent.failed_at = datetime.now(UTC)
                 return
+            if registration.source == "bulk":
+                evidence = state_db.scalar(
+                    select(RegistrationConsent.id)
+                    .join(
+                        RegistrationNoticeVersion,
+                        (RegistrationNoticeVersion.tenant_id == RegistrationConsent.tenant_id)
+                        & (RegistrationNoticeVersion.version == RegistrationConsent.notice_version)
+                        & (RegistrationNoticeVersion.sha256 == RegistrationConsent.notice_digest)
+                        & (
+                            RegistrationNoticeVersion.lawful_basis
+                            == RegistrationConsent.lawful_basis
+                        ),
+                    )
+                    .where(
+                        RegistrationConsent.tenant_id == job.tenant_id,
+                        RegistrationConsent.event_id == job.event_id,
+                        RegistrationConsent.registration_id == registration.id,
+                        RegistrationNoticeVersion.active.is_(True),
+                        RegistrationNoticeVersion.approved_at.is_not(None),
+                    )
+                    .limit(1)
+                )
+                if evidence is None:
+                    intent.status = "failed"
+                    intent.error_code = "NOTICE_UNAVAILABLE"
+                    intent.failed_at = datetime.now(UTC)
+                    return
             credential = self.keys.decrypt(
                 ticket.token_ciphertext,
                 ticket.key_version,
@@ -233,6 +459,7 @@ class TicketService:
             event_name = event.name
             starts_at = event.starts_at
             timezone = event.timezone
+            venue = event.location
             organizer_name = (
                 brand.display_name
                 if brand and brand.published_version and brand.display_name
@@ -269,6 +496,7 @@ class TicketService:
                 event_name=event_name,
                 starts_at=starts_at,
                 timezone=timezone,
+                venue=venue,
                 organizer_name=organizer_name,
                 sender_name=sender_name,
                 primary_color=primary_color,

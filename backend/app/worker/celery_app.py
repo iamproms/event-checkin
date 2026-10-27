@@ -98,6 +98,10 @@ def process_job(job_id: str) -> None:
             )
             handlers["ticket.issue"] = tickets.issue_job
             handlers["ticket.deliver"] = tickets.deliver_job
+        from app.operations.service import EventOperationsService
+
+        imports = EventOperationsService(runtime, None, None)
+        handlers["registration.import"] = imports.process_import_job
         execute_job(operator, runtime, verified_job_id, handlers)
     finally:
         operator.dispose()

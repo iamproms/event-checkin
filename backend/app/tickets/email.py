@@ -108,6 +108,7 @@ def ticket_message(
     event_name: str,
     starts_at: datetime,
     timezone: str,
+    venue: str | None = None,
     organizer_name: str,
     sender_name: str,
     primary_color: str | None = None,
@@ -119,6 +120,7 @@ def ticket_message(
     organizer = escape(organizer_name)
     clean_sender = _sender_label(sender_name, organizer_name)
     date_html = escape(date_label)
+    venue_label = venue.strip() if venue else "Venue to be confirmed"
     brand_rule = (
         primary_color if primary_color and BRAND_COLOR.fullmatch(primary_color) else "#205b4a"
     )
@@ -132,6 +134,7 @@ def ticket_message(
     text = (
         f"Your ticket for {event_name}\n"
         f"{date_label}\n"
+        f"Venue: {venue_label}\n"
         f"Presented by {organizer_name}\n\n"
         "Present the QR code in this email at the gate. Keep it private; "
         "the first valid scan uses it. "
@@ -146,6 +149,7 @@ def ticket_message(
         f'<p style="font-size:14px;margin:0 0 24px">{organizer}</p>'
         f'<h1 style="font-size:28px;line-height:1.2;margin:0 0 12px">{title}</h1>'
         f'<p style="margin:0 0 24px">{date_html}</p>'
+        f'<p style="margin:0 0 24px">Venue: {escape(venue_label)}</p>'
         '<img src="cid:ticket-qr" alt="Entry QR code" width="240" height="240" '
         'style="display:block;max-width:100%;height:auto;margin:24px 0" />'
         "<p>Present this QR code at the gate. Keep it private; the first valid scan uses it.</p>"

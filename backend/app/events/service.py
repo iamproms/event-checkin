@@ -2,7 +2,7 @@
 
 import re
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -26,6 +26,11 @@ class EventInvalid(ValueError):
 
 class EventConflict(ValueError):
     """An optimistic revision or database uniqueness check failed."""
+
+
+def event_slug(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-")[:48].strip("-")
+    return f"{base or 'event'}-{uuid4().hex[:8]}"
 
 
 def utc(value: datetime) -> datetime:
@@ -122,7 +127,9 @@ def validate_form(schema: dict[str, object]) -> dict[str, object]:
 def readiness(event: Event, enabled_gates: int, now: datetime | None = None) -> list[str]:
     instant = now or datetime.now(UTC)
     missing: list[str] = []
-    if event.registration_opens_at is None or event.registration_closes_at is None:
+    if event.registration_mode == "public" and (
+        event.registration_opens_at is None or event.registration_closes_at is None
+    ):
         missing.append("Set registration opening and closing dates.")
     if event.checkin_opens_at is None or event.checkin_closes_at is None:
         missing.append("Set the check-in window.")
@@ -130,10 +137,11 @@ def readiness(event: Event, enabled_gates: int, now: datetime | None = None) -> 
         missing.append("Move the event end into the future.")
     if enabled_gates == 0:
         missing.append("Enable at least one gate.")
-    try:
-        validate_form(event.form_schema)
-    except EventInvalid:
-        missing.append("Complete the registration form.")
+    if event.registration_mode == "public":
+        try:
+            validate_form(event.form_schema)
+        except EventInvalid:
+            missing.append("Complete the registration form.")
     return missing
 
 
@@ -192,19 +200,24 @@ class EventService:
         host: str,
         token: str,
         *,
-        slug: str,
+        slug: str | None = None,
         name: str,
         starts_at: datetime,
         ends_at: datetime,
         timezone: str,
         location: str | None = None,
+        description: str | None = None,
+        registration_mode: str = "public",
     ) -> Event:
         tenant, actor = self._scope(host, token)
+        resolved_slug = slug if slug is not None else event_slug(name)
         if (
-            not SLUG.fullmatch(slug)
+            not SLUG.fullmatch(resolved_slug)
             or not name.strip()
             or len(name) > 160
             or any(ord(char) < 32 for char in name)
+            or registration_mode not in {"public", "import_only"}
+            or (description is not None and len(description) > 2000)
             or (
                 location is not None
                 and (len(location) > 300 or any(ord(char) < 32 for char in location))
@@ -216,13 +229,15 @@ class EventService:
         with authorized_tenant_session(self.engine, tenant) as db:
             event = Event(
                 tenant_id=tenant,
-                slug=slug,
+                slug=resolved_slug,
                 name=name.strip(),
+                description=description.strip() if description else None,
                 starts_at=utc(starts_at),
                 ends_at=utc(ends_at),
                 timezone=timezone,
                 location=location,
                 status="draft",
+                registration_mode=registration_mode,
                 form_schema={"fields": []},
                 form_schema_version=1,
                 pii_purge_due_at=utc(ends_at) + PURGE_AFTER,
@@ -267,6 +282,8 @@ class EventService:
         starts_at: datetime,
         ends_at: datetime,
         timezone: str,
+        description: str | None = None,
+        registration_mode: str | None = None,
         registration_opens_at: datetime | None,
         registration_closes_at: datetime | None,
         checkin_opens_at: datetime | None,
@@ -277,6 +294,10 @@ class EventService:
             not name.strip()
             or len(name) > 160
             or any(ord(char) < 32 for char in name)
+            or (
+                registration_mode is not None and registration_mode not in {"public", "import_only"}
+            )
+            or (description is not None and len(description) > 2000)
             or (
                 location is not None
                 and (len(location) > 300 or any(ord(char) < 32 for char in location))
@@ -305,10 +326,15 @@ class EventService:
                 or registration_closes_at != event.registration_closes_at
                 or checkin_opens_at != event.checkin_opens_at
                 or checkin_closes_at != event.checkin_closes_at
+                or (registration_mode is not None and registration_mode != event.registration_mode)
             ):
                 raise EventInvalid("Published schedule is fixed in v1")
             event.name, event.location = name.strip(), location
+            if description is not None:
+                event.description = description.strip() or None
             if event.status == "draft":
+                if registration_mode is not None:
+                    event.registration_mode = registration_mode
                 event.starts_at, event.ends_at, event.timezone = (
                     utc(starts_at),
                     utc(ends_at),

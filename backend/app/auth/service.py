@@ -71,6 +71,19 @@ class AuthService:
         self.engine, self.settings, self.corpus, self.email = engine, settings, corpus, email
 
     def _tenant(self, db: Session, hostname: str) -> UUID:
+        if hostname.startswith("shared-tenant-") and self.settings.platform_host:
+            try:
+                shared_id = UUID(hostname.removeprefix("shared-tenant-"))
+            except ValueError as exc:
+                raise AuthDenied("Unauthorized") from exc
+            record = db.get(Tenant, shared_id)
+            if record is None or record.status not in {"active", "suspended"}:
+                raise AuthDenied("Unauthorized")
+            db.execute(
+                text("SELECT set_config('app.tenant_id', :id, true)"),
+                {"id": str(shared_id)},
+            )
+            return shared_id
         host = normalize_hostname(hostname)
         tenant = db.execute(
             text("SELECT resolve_auth_tenant_domain(:host)"), {"host": host}
@@ -534,6 +547,120 @@ class AuthService:
             )
             self._audit(db, "membership.revoked", actor.id, tenant, {"target_user_id": str(target)})
 
+    def list_gate_staff(self, hostname: str, raw_session: str) -> list[dict[str, object]]:
+        tenant = self.authorize(hostname, raw_session, "staff.manage")
+        with Session(self.engine) as db, db.begin():
+            self._tenant(db, hostname)
+            members = db.execute(
+                select(TenantMembership, User.email)
+                .join(User, User.id == TenantMembership.user_id)
+                .where(
+                    TenantMembership.tenant_id == tenant,
+                    TenantMembership.role.in_(
+                        ["gate_scanner", "gate_staff", "gate_supervisor"]
+                    ),
+                )
+                .order_by(User.email)
+            ).all()
+            assignments = db.scalars(
+                select(EventAssignment).where(
+                    EventAssignment.tenant_id == tenant,
+                    EventAssignment.revoked_at.is_(None),
+                    EventAssignment.valid_from <= utcnow(),
+                    (
+                        EventAssignment.valid_until.is_(None)
+                        | (EventAssignment.valid_until > utcnow())
+                    ),
+                )
+            ).all()
+            by_user: dict[UUID, list[dict[str, str]]] = {}
+            for assignment in assignments:
+                by_user.setdefault(assignment.user_id, []).append(
+                    {
+                        "event_id": str(assignment.event_id),
+                        "gate_id": str(assignment.gate_id) if assignment.gate_id else "",
+                    }
+                )
+            return [
+                {
+                    "user_id": str(member.user_id),
+                    "email": email,
+                    "role": member.role,
+                    "status": member.status,
+                    "assignments": by_user.get(member.user_id, []),
+                }
+                for member, email in members
+            ]
+
+    def reassign_gate_staff(
+        self, hostname: str, raw_session: str, target: UUID, event_id: UUID, gate_id: UUID
+    ) -> None:
+        tenant = self.authorize(hostname, raw_session, "staff.manage")
+        actor, _, _ = self.current(hostname, raw_session)
+        with Session(self.engine) as db, db.begin():
+            self._tenant(db, hostname)
+            member = db.scalar(
+                select(TenantMembership)
+                .where(
+                    TenantMembership.tenant_id == tenant,
+                    TenantMembership.user_id == target,
+                )
+                .with_for_update()
+            )
+            if (
+                member is None
+                or member.status != "active"
+                or member.role not in {"gate_scanner", "gate_staff", "gate_supervisor"}
+            ):
+                raise AuthDenied("Gate staff membership unavailable")
+            event_status = db.scalar(
+                select(Event.status).where(Event.tenant_id == tenant, Event.id == event_id)
+            )
+            valid_gate = db.scalar(
+                select(Gate.id).where(
+                    Gate.tenant_id == tenant,
+                    Gate.event_id == event_id,
+                    Gate.id == gate_id,
+                    Gate.status == "active",
+                )
+            )
+            if event_status not in {"draft", "published"} or valid_gate is None:
+                raise Forbidden("Event or gate assignment unavailable")
+            current = db.scalars(
+                select(EventAssignment)
+                .where(
+                    EventAssignment.tenant_id == tenant,
+                    EventAssignment.user_id == target,
+                    EventAssignment.revoked_at.is_(None),
+                )
+                .with_for_update()
+            ).all()
+            if len(current) == 1 and (
+                current[0].event_id, current[0].gate_id
+            ) == (event_id, gate_id):
+                return
+            for assignment in current:
+                assignment.revoked_at = utcnow()
+            db.add(
+                EventAssignment(
+                    tenant_id=tenant, event_id=event_id, gate_id=gate_id,
+                    user_id=target, valid_from=utcnow(),
+                )
+            )
+            db.execute(
+                update(AuthSession)
+                .where(
+                    AuthSession.user_id == target,
+                    AuthSession.tenant_id == tenant,
+                    AuthSession.revoked_at.is_(None),
+                )
+                .values(revoked_at=utcnow())
+            )
+            self._audit(
+                db, "gate_staff.assignment_changed", actor.id, tenant,
+                {"target_user_id": str(target), "event_id": str(event_id), "gate_id": str(gate_id)},
+            )
+
     def issue_invitation(
         self,
         hostname: str,
@@ -542,12 +669,14 @@ class AuthService:
         role: str,
         event_id: UUID | None,
         gate_id: UUID | None,
+        origin: str | None = None,
     ) -> None:
         email = single_email_address(email)
         if isinstance(self.email, DisabledEmailDelivery):
             raise DeliveryUnavailable("Transactional email delivery is not configured")
-        base_url = self._base_url(hostname)
         tenant = self.authorize(hostname, raw_session, "invitation.issue")
+        shared = hostname.startswith("shared-tenant-")
+        base_url = origin if shared and origin else self._base_url(hostname)
         actor, actor_member, _ = self.current(hostname, raw_session)
         delegate_roles = {
             "tenant_owner": {
@@ -608,7 +737,8 @@ class AuthService:
         self.email.send_link(
             email,
             "Your staff invitation",
-            f"{base_url}/invite#token={quote(invitation)}",
+            f"{base_url}/invite#token={quote(invitation)}"
+            + (f"&tenant={tenant}" if shared else ""),
         )
 
     def accept_invitation(self, hostname: str, token: str, password: str) -> tuple[str, str]:
@@ -686,11 +816,18 @@ class AuthService:
                 return ("mfa" if totp and totp.confirmed_at else "enroll"), raw
             return "session", self._session(db, user.id, tenant, invite.role, False)
 
-    def request_reset(self, hostname: str, email: str, ip: str) -> None:
+    def request_reset(
+        self, hostname: str, email: str, ip: str,
+        shared_origin: str | None = None, shared_tenant: UUID | None = None,
+    ) -> None:
         email = single_email_address(email)
         if isinstance(self.email, DisabledEmailDelivery):
             raise DeliveryUnavailable("Transactional email delivery is not configured")
-        base_url = self._base_url(hostname)
+        if (shared_origin is None) != (shared_tenant is None):
+            raise ValueError("Shared reset requires an origin and tenant")
+        if shared_tenant is not None and hostname != f"shared-tenant-{shared_tenant}":
+            raise ValueError("Shared reset tenant mismatch")
+        base_url = shared_origin if shared_origin is not None else self._base_url(hostname)
         with Session(self.engine) as limiter, limiter.begin():
             tenant = self._tenant(limiter, hostname)
             self._limit(limiter, f"reset:account:{tenant}:{email.casefold()}", utcnow())
@@ -712,7 +849,10 @@ class AuthService:
                 )
             )
             self._audit(db, "password_reset.requested", user.id, tenant)
-        self.email.send_link(email, "Reset your password", f"{base_url}/reset#token={quote(raw)}")
+        tenant_suffix = f"&tenant={shared_tenant}" if shared_tenant is not None else ""
+        self.email.send_link(
+            email, "Reset your password", f"{base_url}/reset#token={quote(raw)}{tenant_suffix}"
+        )
 
     def complete_reset(self, hostname: str, token: str, password: str, ip: str = "unknown") -> None:
         with Session(self.engine) as limiter, limiter.begin():

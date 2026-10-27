@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
     build: { rollupOptions: { input: {
       main: "index.html",
       platform: "platform.html",
+      platformConsole: "platform-console.html",
+      workspace: "workspace.html",
+      gate: "gate.html",
       domains: "domains.html",
       events: "events.html",
       branding: "branding.html",

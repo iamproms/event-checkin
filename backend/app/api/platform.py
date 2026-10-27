@@ -13,6 +13,7 @@ from app.auth.email import DeliveryUnavailable
 from app.auth.service import AuthDenied
 from app.tenancy.domains import DomainDenied, DomainService
 from app.tenancy.platform_auth import PlatformAuth
+from app.tenancy.shared_onboarding import SharedOnboarding
 
 router = APIRouter(prefix="/api/v1/platform", tags=["platform provisioning"])
 PLATFORM_SESSION_COOKIE = "__Host-ecs_platform_session"
@@ -63,6 +64,15 @@ class ProvisionBody(BaseModel):
 
 class OwnerBody(BaseModel):
     email: str
+
+
+class SharedOrganizationBody(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    organizer_email: str
+    organizer_name: str | None = Field(default=None, max_length=160)
+    contact_phone: str | None = Field(default=None, max_length=40)
+    event_name: str | None = Field(default=None, max_length=200)
+    idempotency_key: UUID
 
 
 def fail(exc: Exception) -> HTTPException:
@@ -161,6 +171,33 @@ def logout(request: Request, response: Response, auth: Auth) -> dict[str, str]:
 
 def actor(request: Request, auth: PlatformAuth) -> UUID:
     return auth.current(request.cookies.get(PLATFORM_SESSION_COOKIE, "")).id
+
+
+@router.post("/organizations", dependencies=[Depends(csrf)], status_code=201)
+def create_shared_organization(
+    body: SharedOrganizationBody, request: Request, auth: Auth, service: Domains,
+) -> dict[str, str]:
+    try:
+        return SharedOnboarding(service.control_engine, request.app.state.email_delivery).create(
+            actor=actor(request, auth), idempotency_key=body.idempotency_key,
+            name=body.name, organizer_email=body.organizer_email,
+            organizer_name=body.organizer_name, contact_phone=body.contact_phone,
+            event_name=body.event_name, origin=request.state.trusted_origin,
+        )
+    except (AuthDenied, DomainDenied, ValueError, IntegrityError) as exc:
+        raise fail(exc) from exc
+
+
+@router.post("/organizations/{tenant_id}/invitation/resend", dependencies=[Depends(csrf)])
+def resend_shared_organizer(
+    tenant_id: UUID, request: Request, auth: Auth, service: Domains,
+) -> dict[str, str]:
+    try:
+        return SharedOnboarding(service.control_engine, request.app.state.email_delivery).resend(
+            actor(request, auth), tenant_id, request.state.trusted_origin,
+        )
+    except (AuthDenied, DomainDenied, ValueError) as exc:
+        raise fail(exc) from exc
 
 
 @router.post("/tenants", dependencies=[Depends(csrf)], status_code=201)

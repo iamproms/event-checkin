@@ -8,7 +8,7 @@
 ## Approved foundation
 
 - Self-hosted Inter with a system sans-serif fallback. Use weights 400, 500, and 600.
-- Warm-neutral surfaces; light is the default. Dark mode is fully supported and selected explicitly. Persist the user's selection locally. Do not switch automatically from OS preference alone.
+- Warm-neutral surfaces with complete light and dark themes. The later [G-08 product-experience decision](G-08_EVENT_FIRST_PRODUCT_EXPERIENCE.md) supersedes the original first-visit behavior: the preference is now System, Light, or Dark; System is the initial value and follows operating-system changes.
 - Deep evergreen for primary actions. Semantic status colors and focus indicators are independent of tenant branding.
 - Comfortable density by default. Compact density is limited to suitable admin interfaces and never shrinks touch-critical controls.
 - 4px control radii, 8px surface radii, the documented 4px-based spacing scale, neutral-fill selected navigation, subtle elevation on floating surfaces only, and reduced-motion support.

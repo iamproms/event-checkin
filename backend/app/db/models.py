@@ -46,6 +46,25 @@ class Tenant(Base):
     )
 
 
+class PlatformOnboardingRequest(Base):
+    __tablename__ = "platform_onboarding_requests"
+
+    idempotency_key: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    actor_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("tenants.id"))
+    payload_digest: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    organizer_email: Mapped[str] = mapped_column(Text, nullable=False)
+    organizer_name: Mapped[str | None] = mapped_column(Text)
+    contact_phone: Mapped[str | None] = mapped_column(Text)
+    requested_event_name: Mapped[str | None] = mapped_column(Text)
+    invitation_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    delivery_status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_onboarding_request_tenant"),)
+
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[UUID] = mapped_column(
@@ -275,11 +294,15 @@ class Event(Base):
     )
     slug: Mapped[str] = mapped_column(CITEXT, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     timezone: Mapped[str] = mapped_column(Text, nullable=False)
     location: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
+    registration_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="public"
+    )
     registration_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     registration_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     checkin_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -309,6 +332,10 @@ class Event(Base):
         CheckConstraint("form_schema_version > 0", name="ck_events_form_version"),
         CheckConstraint(
             "status IN ('draft','published','closed','cancelled')", name="ck_events_status"
+        ),
+        CheckConstraint(
+            "registration_mode IN ('public','import_only')",
+            name="ck_events_registration_mode",
         ),
         CheckConstraint("revision > 0", name="ck_events_revision"),
         CheckConstraint(
@@ -411,7 +438,7 @@ class Registration(Base):
     event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     full_name: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str] = mapped_column(CITEXT, nullable=False)
-    phone_e164: Mapped[str] = mapped_column(String(16), nullable=False)
+    phone_e164: Mapped[str | None] = mapped_column(String(16), nullable=True)
     custom_answers: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
@@ -431,6 +458,10 @@ class Registration(Base):
         ),
         UniqueConstraint("tenant_id", "event_id", "id", name="uq_registrations_event_id"),
         CheckConstraint("phone_e164 ~ '^\\+[1-9][0-9]{1,14}$'", name="ck_registrations_phone_e164"),
+        CheckConstraint(
+            "source <> 'self' OR phone_e164 IS NOT NULL",
+            name="ck_registrations_self_phone_required",
+        ),
         CheckConstraint(
             "email::text = btrim(email::text) AND length(email::text) > 0",
             name="ck_registrations_email_trimmed",
@@ -505,8 +536,8 @@ class RegistrationConsent(Base):
     notice_version: Mapped[int] = mapped_column(Integer, nullable=False)
     notice_digest: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     lawful_basis: Mapped[str] = mapped_column(Text, nullable=False)
-    acknowledged_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, server_default=text("now()")
     )
     marketing_opt_in: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
@@ -527,7 +558,12 @@ class RegistrationConsent(Base):
             "tenant_id", "event_id", "registration_id", name="uq_registration_consents_registration"
         ),
         CheckConstraint("octet_length(notice_digest) = 32", name="ck_registration_consents_digest"),
-        CheckConstraint("source = 'self'", name="ck_registration_consents_source"),
+        CheckConstraint("source IN ('self','bulk')", name="ck_registration_consents_source"),
+        CheckConstraint(
+            "(source='self' AND acknowledged_at IS NOT NULL) OR "
+            "(source='bulk' AND acknowledged_at IS NULL)",
+            name="ck_registration_consents_acknowledgement",
+        ),
     )
 
 
@@ -635,6 +671,136 @@ class TicketAudit(Base):
             name="fk_ticket_audit_actor_member",
         ),
         Index("ix_ticket_audit_scope", "tenant_id", "event_id", "ticket_id", "occurred_at"),
+    )
+
+
+class ParticipantImport(Base):
+    __tablename__ = "participant_imports"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    created_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    file_name: Mapped[str] = mapped_column(Text, nullable=False)
+    file_sha256: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="uploaded")
+    mapping: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    notice_version: Mapped[int | None] = mapped_column(Integer)
+    lawful_basis: Mapped[str | None] = mapped_column(Text)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    valid_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    invalid_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    duplicate_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    imported_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    current_job_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id"],
+            ["events.tenant_id", "events.id"],
+            name="fk_participant_imports_event",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "created_by"],
+            ["tenant_memberships.tenant_id", "tenant_memberships.user_id"],
+            name="fk_participant_imports_actor",
+        ),
+        UniqueConstraint("tenant_id", "event_id", "id", name="uq_participant_import_scope"),
+        UniqueConstraint("tenant_id", "event_id", "file_sha256", name="uq_participant_import_file"),
+    )
+
+
+class ParticipantImportRow(Base):
+    __tablename__ = "participant_import_rows"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    import_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    row_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    raw_data: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    normalized_data: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, server_default="pending")
+    error_codes: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    registration_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "import_id"],
+            [
+                "participant_imports.tenant_id",
+                "participant_imports.event_id",
+                "participant_imports.id",
+            ],
+            name="fk_participant_import_rows_import",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "registration_id"],
+            ["registrations.tenant_id", "registrations.event_id", "registrations.id"],
+            name="fk_participant_import_rows_registration",
+        ),
+        UniqueConstraint("tenant_id", "import_id", "row_number", name="uq_import_row_number"),
+    )
+
+
+class CheckinAttempt(Base):
+    __tablename__ = "checkin_attempts"
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    gate_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    ticket_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    registration_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    scanner_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "gate_id"],
+            ["gates.tenant_id", "gates.event_id", "gates.id"],
+            name="fk_checkin_attempts_gate",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "ticket_id"],
+            ["tickets.tenant_id", "tickets.event_id", "tickets.id"],
+            name="fk_checkin_attempts_ticket",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "event_id", "registration_id"],
+            ["registrations.tenant_id", "registrations.event_id", "registrations.id"],
+            name="fk_checkin_attempts_registration",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "scanner_user_id"],
+            ["tenant_memberships.tenant_id", "tenant_memberships.user_id"],
+            name="fk_checkin_attempts_scanner",
+        ),
+        Index("ix_checkin_attempts_event", "tenant_id", "event_id", "occurred_at"),
+        Index("ix_checkin_attempts_gate", "tenant_id", "event_id", "gate_id", "occurred_at"),
+        Index(
+            "uq_checkin_accepted_ticket",
+            "tenant_id",
+            "event_id",
+            "ticket_id",
+            unique=True,
+            postgresql_where=text("outcome = 'accepted'"),
+        ),
     )
 
 

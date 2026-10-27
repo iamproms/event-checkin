@@ -2,6 +2,8 @@
 .env.*
 !.env.*.example
 .venv/
+backend/.venv
+.aws
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -13,4 +15,5 @@ frontend/test-results/
 frontend/playwright-report/
 *.egg-info/
 .coverage
+.taste-skill/
 

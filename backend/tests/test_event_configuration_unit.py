@@ -1,10 +1,33 @@
 """Pure M2-03 validation, including time-zone and schema attack cases."""
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
-from app.events.service import EventInvalid, utc, validate_form, validate_timezone, validate_windows
+from app.events.service import (
+    EventInvalid,
+    readiness,
+    utc,
+    validate_form,
+    validate_timezone,
+    validate_windows,
+)
+
+
+def test_import_only_event_publishes_without_public_registration_window() -> None:
+    event = SimpleNamespace(
+        registration_mode="import_only",
+        registration_opens_at=None,
+        registration_closes_at=None,
+        checkin_opens_at=datetime.now(UTC) - timedelta(minutes=1),
+        checkin_closes_at=datetime.now(UTC) + timedelta(days=1),
+        ends_at=datetime.now(UTC) + timedelta(days=1),
+        form_schema={"fields": []},
+    )
+    assert readiness(event, 2) == []
+    event.registration_mode = "public"
+    assert "Set registration opening and closing dates." in readiness(event, 2)
 
 
 def test_form_schema_bounds_and_injection() -> None:

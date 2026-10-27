@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Dialog, Field, Status, initializeTheme, setTheme, type Theme } from './ui';
+import { Button, Dialog, Field, Status, ThemeControl } from './ui';
 import { getJson, ManagementApiError, mutateJson } from './management-api';
 import { TenantBrandMark } from './tenant-brand';
 import './branding.css';
@@ -45,7 +45,6 @@ function Preview({ title, theme, editor, logo }: { title: string; theme: 'light'
 }
 
 function App() {
-  const [theme, setCurrentTheme] = useState<Theme>(initializeTheme);
   const [saved, setSaved] = useState<Branding | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
@@ -103,12 +102,9 @@ function App() {
     setSaved(result); setNotice('Logo added to the draft. Publish to make it visible to attendees.');
   }
 
-  function changeTheme() { const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next); setCurrentTheme(next); }
-
   return <main className="management branding-main">
     <header><p className="brand"><TenantBrandMark area="Branding" /></p>
-      <Button variant="secondary" onClick={changeTheme}>Use {theme === 'light' ? 'dark' : 'light'} theme</Button></header>
+      <ThemeControl compact /></header>
     <h1>Tenant branding</h1>
     <p className="intro branding-intro">Give your registration and ticket experience a clear identity. Changes stay in a draft until you publish them.</p>
     {error && <Status tone="danger" title="Action failed" instruction={error} announce="assertive" />}

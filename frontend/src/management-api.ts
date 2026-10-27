@@ -21,3 +21,33 @@ export async function mutateJson<T>(path: string, body: object, platform = false
   if (!response.ok) throw new ManagementApiError(result.detail?.message || 'Request failed', response.status);
   return result;
 }
+
+async function csrfToken(): Promise<string> {
+  return (await getJson<{ csrf_token: string }>('/api/v1/auth/csrf')).csrf_token;
+}
+
+export async function mutateForm<T>(path: string, body: FormData): Promise<T> {
+  const response = await fetch(path, {
+    method: 'POST', credentials: 'same-origin', cache: 'no-store',
+    headers: { 'x-csrf-token': await csrfToken() }, body,
+  });
+  const result = await response.json() as T & { detail?: { message?: string } };
+  if (!response.ok) throw new ManagementApiError(result.detail?.message || 'Request failed', response.status);
+  return result;
+}
+
+export async function downloadFile(path: string): Promise<void> {
+  const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' });
+  if (!response.ok) {
+    let message = 'Download failed';
+    try { message = ((await response.json()) as { detail?: { message?: string } }).detail?.message || message; } catch { /* non-JSON error */ }
+    throw new ManagementApiError(message, response.status);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition') || '';
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'event-export.csv';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = filename; link.click();
+  URL.revokeObjectURL(url);
+}

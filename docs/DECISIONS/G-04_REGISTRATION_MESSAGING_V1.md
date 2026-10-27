@@ -10,6 +10,8 @@ Marketing consent is separate, optional, unchecked by default, and never an elig
 
 Public duplicate-contact outcomes are deliberately neutral. The service does not merge, replace, or disclose an existing registration. Independent database constraints enforce one active email and one active phone per event under races.
 
+Bulk import records the active approved notice version and an operator-attested lawful basis as import evidence. Its `acknowledged_at` is null: importing a row is never represented as attendee acknowledgement. The import service rechecks the active notice before each background chunk and sets marketing opt-in to false. The event operator remains responsible for the separately approved notice delivery procedure before transactional tickets are sent to imported contacts.
+
 ## Activation gates
 
 No notice is seeded by migrations. Real registration remains fail-closed until the product owner approves the final notice and lawful basis and an accountable operator installs an immutable active notice version. Synthetic notices may be used only in test databases.

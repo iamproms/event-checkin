@@ -12,6 +12,7 @@ from app.tickets.service import TicketDenied, TicketService
 router = APIRouter(
     prefix="/api/v1/events/{event_id}/registrations/{registration_id}/ticket", tags=["tickets"]
 )
+bulk_router = APIRouter(prefix="/api/v1/events/{event_id}/tickets", tags=["tickets"])
 
 
 def service(request: Request) -> TicketService:
@@ -60,5 +61,29 @@ def command(
         raise HTTPException(404)
     try:
         return tickets.command(*credentials(request), event_id, registration_id, action)
+    except (AuthDenied, Forbidden, TicketDenied) as exc:
+        raise denied(exc) from exc
+
+
+@bulk_router.get("/bulk")
+def bulk_status(event_id: UUID, request: Request, tickets: Service) -> dict[str, int]:
+    try:
+        return tickets.bulk_status(*credentials(request), event_id)
+    except (AuthDenied, Forbidden, TicketDenied) as exc:
+        raise denied(exc) from exc
+
+
+@bulk_router.post("/bulk/issue", status_code=202, dependencies=[Depends(csrf)])
+def issue_bulk(event_id: UUID, request: Request, tickets: Service) -> dict[str, int]:
+    try:
+        return tickets.issue_bulk(*credentials(request), event_id)
+    except (AuthDenied, Forbidden, TicketDenied) as exc:
+        raise denied(exc) from exc
+
+
+@bulk_router.post("/bulk/send", status_code=202, dependencies=[Depends(csrf)])
+def send_bulk(event_id: UUID, request: Request, tickets: Service) -> dict[str, int]:
+    try:
+        return tickets.send_bulk(*credentials(request), event_id)
     except (AuthDenied, Forbidden, TicketDenied) as exc:
         raise denied(exc) from exc

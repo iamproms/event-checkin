@@ -1,6 +1,6 @@
 # Event Check-in Platform — Implementation Plan
 
-**Status:** Living roadmap; M1-02–M1-05, M2-01 and M2-03 are merged. M2-02 billing was reprioritized for the demo-critical path and remains incomplete. M1-01 production/staging hardening remains open. M2-04/M3-01/M3-02 have a provider-independent implementation pending review and activation gates.
+**Status:** Living roadmap; M1-02–M1-05, M2-01 and M2-03 are merged. M2-02 billing is deferred. M2-04/M3-01/M3-02 have a provider-independent implementation pending review and activation gates. The immediate release slice is the 1 November 2026 event path: M3-03 import, M3-04 participant operations needed for support, M4-01–M4-04 online gate operations, and an authorized basic attendance CSV. M1-01 staging hardening remains open; see the [event staging runbook](EVENT_STAGING_DEPLOYMENT_RUNBOOK.md).
 **Inputs:** [PRD review](PRD_REVIEW.md), [technical design](TECHNICAL_DESIGN.md), [database design](DATABASE_DESIGN.md), and the [Quiet Precision design-system study](DESIGN_SYSTEM.md).  
 **Decision baseline:** D-01–D-13 in the PRD review. The Quiet Precision foundation and tenant-brand contrast bounds are approved by [G-07](DECISIONS/G-07_VISUAL_FOUNDATION.md); the initial [M0-02 state vocabulary v1](DECISIONS/M0-02_STATE_VOCABULARY_V1.md) covers only documented states. Feature-level states remain owned by their milestones.
 **Planning unit:** Each task is independently reviewable and should be small enough for one pull request or a clearly identified short series of dependent pull requests. No dates or staffing estimates are asserted without team capacity and vendor lead-time information.
@@ -12,6 +12,27 @@ The launch delivers a multi-tenant SaaS with branding and custom domains, single
 **Deferred by D-02:** offline QR validation, local credential manifests, queued scans, synchronization, first-timestamp-wins, and pending-sync dashboard counts (F-06, F-08, N-04 and the offline part of F-09). They have no launch tasks or hidden acceptance criteria. A later offline release requires a separate PRD, threat model, policy, and plan.
 
 The milestone order expresses the **critical dependency path**, not a prohibition on parallel work. Frontend work may proceed alongside the corresponding API work once its contracts and design foundation are approved. Provider integrations can be built behind adapters, but production activation cannot be marked done before commercial, legal, and vendor decisions are recorded.
+
+### Event-first release slice (1 November 2026)
+
+Engineering priority is the shortest secure path through organizer authentication,
+event publication, public registration, bulk import, ticket issuance, assigned
+gate access, atomic online redemption, confirmed attendance and authorized CSV
+export for one operational event with five gates and 3,000–5,000 attendees.
+
+Subscriptions, campaign messaging, advanced analytics, additional provisioning
+enhancements and nonessential integrations are deferred until this path passes a
+representative staging rehearsal. Their interfaces may explain the deferral, but
+must not claim a server operation completed. This priority does not waive RLS,
+host-derived tenancy, MFA, CSRF, the approved online-only scan contract, privacy
+notice/lawful-basis approval, or production provider gates.
+
+The release evidence must include a deterministic 5,000-row import, correction
+and repeat-upload behavior, public registration during import, five simultaneous
+gate sessions, a same-ticket race with exactly one accepted redemption,
+dashboard/export reconciliation, failure recovery, latency/error measurements,
+and a mail capture/sink so the rehearsal sends no bulk external email. Fixtures
+and the full evidence checklist are in [`tests/load`](../tests/load/README.md).
 
 ### Shared definition of done for every implementation task
 

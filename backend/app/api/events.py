@@ -6,7 +6,7 @@ from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import SESSION_COOKIE, csrf
@@ -22,12 +22,14 @@ class StrictBody(BaseModel):
 
 
 class CreateEvent(StrictBody):
-    slug: str
+    slug: str | None = None
     name: str
     starts_at: datetime
     ends_at: datetime
     timezone: str
     location: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    registration_mode: str = "public"
 
     @field_validator("starts_at", "ends_at", mode="before")
     @classmethod
@@ -41,6 +43,8 @@ class EditEvent(StrictBody):
     revision: int
     name: str
     location: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    registration_mode: str | None = None
     starts_at: datetime
     ends_at: datetime
     timezone: str
@@ -116,7 +120,9 @@ def view(event: object) -> dict[str, object]:
         "id": str(row.id),
         "slug": row.slug,
         "name": row.name,
+        "description": row.description,
         "status": row.status,
+        "registration_mode": row.registration_mode,
         "starts_at": row.starts_at.isoformat(),
         "ends_at": row.ends_at.isoformat(),
         "timezone": row.timezone,

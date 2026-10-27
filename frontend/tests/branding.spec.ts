@@ -37,7 +37,7 @@ test('branding editor previews both themes, reflows and confirms publication', a
   await page.getByRole('button', { name: 'Confirm publish' }).click();
   await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
   for (const theme of ['light', 'dark']) {
-    if (theme === 'dark') await page.getByRole('button', { name: 'Use dark theme' }).click();
+    await page.getByLabel('Theme preference').selectOption(theme);
     await page.setViewportSize({ width: 320, height: 740 });
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);

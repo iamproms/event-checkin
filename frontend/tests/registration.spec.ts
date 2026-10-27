@@ -52,6 +52,6 @@ test('closed public registration has no form and retains theme control', async (
   await page.goto('/register.html?event=demo');
   await expect(page.getByRole('status')).toContainText('Registration unavailable');
   await expect(page.getByRole('button', { name: 'Submit registration' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Use dark theme' }).click();
+  await page.getByLabel('Theme preference').selectOption('dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });

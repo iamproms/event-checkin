@@ -131,7 +131,7 @@ def pg(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Harness]:
         engines.append(owner)
         with owner.connect() as db:
             assert db.scalar(text("SELECT version_num FROM alembic_version")) == (
-                "0010_ticket_delivery"
+                "0012_shared_event_release"
             )
             for table in ("tenant_domains", "staff_invitations", "domain_reconcile_requests"):
                 assert db.execute(
@@ -515,7 +515,7 @@ def test_tls_loss_and_suspended_owner_recovery(pg: Harness) -> None:
 
 def test_role_separation_rls_and_concurrent_hostname_claim(pg: Harness) -> None:
     first, first_domain, _, _ = pg.domain.provision(pg.actor, "First Tenant", "first")
-    second, _, _, _ = pg.domain.provision(pg.actor, "Second Tenant", "second")
+    second, second_domain, _, _ = pg.domain.provision(pg.actor, "Second Tenant", "second")
     with pg.control.connect() as db:
         assert (
             db.scalar(text("SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user")) is False
@@ -589,10 +589,12 @@ def test_role_separation_rls_and_concurrent_hostname_claim(pg: Harness) -> None:
     with pg.owner.begin() as db:
         db.execute(
             text("""UPDATE tenant_domains SET next_reconcile_at=now()-interval '1 minute'
-                WHERE id=:id"""),
-            {"id": first_domain},
+            WHERE id IN (:first, :second)"""),
+            {"first": first_domain, "second": second_domain},
         )
-    assert schedule_due_reconciliations(pg.scheduler, limit=1) == 1
+    assert schedule_due_reconciliations(pg.scheduler, limit=2) == 2
+    assert pg.job_for(first_domain)[0] == first
+    assert pg.job_for(second_domain)[0] == second
 
     def claim(tenant_id: UUID) -> bool:
         try:

@@ -1,0 +1,13 @@
+{
+  "base_url": "https://tenant-staging-host",
+  "origin": "https://tenant-staging-host",
+  "event_id": "event-uuid",
+  "credential": "synthetic-ticket-credential-from-capture-transport",
+  "sessions": [
+    {"gate_id": "gate-1-uuid", "session_cookie": "secret", "csrf": "secret"},
+    {"gate_id": "gate-2-uuid", "session_cookie": "secret", "csrf": "secret"},
+    {"gate_id": "gate-3-uuid", "session_cookie": "secret", "csrf": "secret"},
+    {"gate_id": "gate-4-uuid", "session_cookie": "secret", "csrf": "secret"},
+    {"gate_id": "gate-5-uuid", "session_cookie": "secret", "csrf": "secret"}
+  ]
+}

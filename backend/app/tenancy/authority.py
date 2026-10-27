@@ -108,8 +108,9 @@ def canonical_authority(request: Request, settings: Settings) -> tuple[str, str]
     if request.url.path.startswith("/api/v1/platform"):
         if settings.platform_host is None or host != settings.platform_host:
             raise AuthorityDenied("Platform host required")
-    elif settings.platform_host is not None and host == settings.platform_host:
-        raise AuthorityDenied("Tenant routes are unavailable on the platform host")
+    # The shared application host may serve tenant routes only through a
+    # signed routing context, checked in the request middleware. The service
+    # still requires a tenant-bound session and membership for every action.
     origin = (
         (
             request.url.scheme

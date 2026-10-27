@@ -1,10 +1,34 @@
 # Event Check-in Platform
 
+## Event-first shared-host release (in progress)
+
+The current feature branch adds migration `0012_shared_event_release`. The platform host now has one staff sign-in and an organization form that requires only an organization name and organizer email. After account setup and MFA, organizers use the same host for their tenant-scoped workspace. Newly created events default to import-only mode; CSV files may contain only an email column. Import, QR issuance, and ticket sending are separate actions. The established custom-domain and public-registration paths remain available.
+
+For a local rehearsal, back up the database and apply the new migration, then run the local HTTPS services. On the existing development workstation, the private, Git-ignored helper `bash .env.local-event-smoke` performs those steps and checks migration `0012_shared_event_release`; fresh checkouts should follow [Local startup](#local-startup) and the [HTTPS host runbook](docs/M2-01_PROVISIONING_RUNBOOK.md). Open the platform hostname at `/`, create the organization in `/platform-console.html#organizations`, inspect the local Mailpit inbox, and follow the invitation. Staging and production email remain disabled until an approved transactional provider, sender, privacy notice, and deployment region are configured. See [the staging runbook](docs/EVENT_STAGING_DEPLOYMENT_RUNBOOK.md) for the release gates.
+
 M2-03 event configuration: see [event API contracts](docs/M2-03_EVENT_API_CONTRACTS.md) and [local runbook](docs/M2-03_EVENT_RUNBOOK.md). The event interface is at `/events.html` on an authorized tenant host. The combined provider-independent M2-04/M3-01/M3-02 foundation adds `/branding.html` and `/register.html?event={slug}`; see the [operations runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
 
 M1-01 foundation through M1-05 shared UI primitives and M2-01 tenant provisioning are merged. The API is FastAPI; the web workspace is React, TypeScript and Vite. Approved decisions D-01–D-13, [G-02](docs/DECISIONS/G-02_STAFF_IDENTITY.md), [G-07](docs/DECISIONS/G-07_VISUAL_FOUNDATION.md), and the [M1-04 decision record](docs/DECISIONS/M1-04_JOBS_FILES.md) govern this work.
 
-M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file routes. M2-03 adds event configuration. M2-04/M3-01/M3-02 add reviewed branding, public registration and ticket-delivery foundations. M2-02 billing remains deferred; scanner redemption remains M4.
+M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file routes. M2-03 adds event configuration. M2-04/M3-01/M3-02 add reviewed branding, public registration and ticket-delivery foundations. The current unmerged event-first work adds bulk import, atomic online redemption, live attendance and basic export. M2-02 billing remains deferred.
+
+The immediate operational release path for the 1 November 2026 event is tracked
+in the [event staging deployment and rehearsal runbook](docs/EVENT_STAGING_DEPLOYMENT_RUNBOOK.md).
+It includes the prepared combined web/ingress image, environment inventory,
+external approval blockers, 5,000-person synthetic rehearsal, five-gate race
+criteria, backup/restore and rollback rules. The document is deployment
+preparation, not evidence that a staging or production deployment has occurred.
+
+## Product experience
+
+The frontend is organized into three coherent experiences while preserving the existing host and authentication boundaries:
+
+- Platform Console: `/platform-console.html` with overview, simple shared-host organization creation, domains, subscriptions, operations and settings. The older domain-based provisioning flow remains at `/platform.html` for custom-domain use.
+- Organizer Workspace: `/workspace.html` with live dashboard, events, participants and import, tickets, check-in, gate staff, reports, branding and settings. Communications is deferred.
+- Gate operations: `/gate.html`, with scoped assignment and online server redemption. Admission is shown only after an accepted server response. Camera QR decoding uses the native browser detector where available and a bundled decoder otherwise; the manual credential field remains available.
+- Public attendee registration: `/register.html?event={slug}`, using the published tenant brand and hostname-derived public API.
+
+Every future-facing surface is labeled `Demo data`, `Training demo`, or `Not connected`. Existing live event, branding and domain workflows remain available at `/events.html`, `/branding.html`, and `/domains.html`. See the [frontend architecture, route map and capability matrix](docs/FRONTEND_PRODUCT_ARCHITECTURE.md).
 
 ## Local startup
 
@@ -80,7 +104,7 @@ The isolated M1-05 component examples are at `http://127.0.0.1:5173/ui-lab.html`
 
 ## Environment and migration policy
 
-`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. Production requires `sslmode=verify-full` for runtime, identity, job, and operator connections, plus a trusted database CA. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002`–`0010` cover tenant isolation, identity, reliable jobs/storage, domains, event configuration, branding, registration evidence and ticket delivery. `TICKET_KEYRING_JSON` and `REGISTRATION_RATE_HMAC_KEY` are secrets; generate independent remote values and never use the local fixture. See [schema notes](docs/M1-02_SCHEMA_NOTES.md), [identity contracts](docs/M1-03_AUTH_CONTRACTS.md), [jobs runbook](docs/M1-04_JOBS_STORAGE_RUNBOOK.md), [M2-01 runbook](docs/M2-01_PROVISIONING_RUNBOOK.md), and the [combined registration/ticket runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
+`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. Production requires `sslmode=verify-full` for runtime, identity, job, and operator connections, plus a trusted database CA. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002`–`0012` cover tenant isolation, identity, reliable jobs/storage, domains, event configuration, branding, registration evidence, ticket delivery, import and check-in evidence, and shared-host event release. `TICKET_KEYRING_JSON` and `REGISTRATION_RATE_HMAC_KEY` are secrets; generate independent remote values and never use the local fixture. See [schema notes](docs/M1-02_SCHEMA_NOTES.md), [identity contracts](docs/M1-03_AUTH_CONTRACTS.md), [jobs runbook](docs/M1-04_JOBS_STORAGE_RUNBOOK.md), [M2-01 runbook](docs/M2-01_PROVISIONING_RUNBOOK.md), and the [combined registration/ticket runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
 
 Run migrations as a **single release step before routing traffic to new code**. Back up first, review generated SQL and destructive operations, and rehearse on staging. Prefer a forward fix after a migration reaches production; downgrade only when explicitly reviewed as safe for existing data. The baseline and M1-02 migration can be upgraded and downgraded on an empty database; do not downgrade a populated database without a reviewed data plan.
 

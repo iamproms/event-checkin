@@ -12,7 +12,21 @@
 .management .domain-row h3 { margin: 0 0 var(--space-2); font: var(--type-component); overflow-wrap: anywhere; }
 .management .domain-row .ui-status { margin-top: var(--space-3); }
 .management .proof { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface); }
+.console-link { margin: 0 0 var(--space-6); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-subtle); }
+.console-link a { color: var(--action); font-weight: 600; text-underline-offset: 3px; }
+.recovery-code-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-3) 0 0; padding: 0; list-style: none; }
+.recovery-code-list li { min-width: 0; padding: var(--space-2); border: 1px solid currentColor; border-radius: var(--radius-control); background: var(--surface); }
+.recovery-code-list code { display: block; min-width: 0; color: var(--text); font: .8125rem/1.35 var(--mono, monospace); overflow-wrap: anywhere; user-select: all; }
 .management .muted { color: var(--text-muted); }
 .tenant-brand-mark { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .tenant-brand-mark__logo { display: block; width: auto; max-width: 96px; height: 32px; object-fit: contain; }
+.tenant-brand-mark a { color: inherit; text-decoration: none; }.tenant-brand-mark a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.auth-management { min-width: 0; }.auth-management section h2 { margin: 0 0 var(--space-3); font: var(--type-section); }.auth-management .proof { white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-quiet); }
+.platform-provisioning { width: 100%; max-width: none; margin: 0; padding: 0; }
+.platform-provisioning > .ui-status { margin-top: var(--space-4); }
+.provision-steps { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 2px; margin: 24px 0; border-radius: 6px; overflow: hidden; background: var(--border-subtle); }
+.provision-steps span { padding: 10px 12px; background: var(--surface-quiet); color: var(--text-muted); font-size: 12px; text-align: center; }.provision-steps .is-current { background: var(--action); color: var(--action-text); font-weight: 600; }
+.provision-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; align-items: start; }.provision-grid > section { margin: 0; padding: 20px; border: 1px solid var(--border-subtle); border-radius: var(--radius-surface); }.provision-grid > section:last-child { grid-column: 1 / -1; }.provision-grid h2 { margin: 0 0 6px; font: var(--type-section); }.provision-grid .proof { margin-top: 16px; }.provision-grid code { overflow-wrap: anywhere; user-select: all; }
+@media (max-width: 760px) { .provision-grid { grid-template-columns:1fr; }.provision-grid > section:last-child { grid-column:auto; }.provision-steps { grid-template-columns:1fr 1fr; } }
+@media (max-width: 520px) { .recovery-code-list { grid-template-columns: 1fr; } }
 @media (max-width: 360px) { .management { padding-inline: var(--space-3); } .management header { align-items: flex-start; flex-direction: column; } .management h1 { font: var(--type-subsection); } }

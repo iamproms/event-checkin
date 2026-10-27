@@ -11,8 +11,12 @@ from app.api.branding import router as branding_router
 from app.api.domains import router as domains_router
 from app.api.events import router as events_router
 from app.api.health import ReadinessResponse, health, readiness
+from app.api.operations import event_router as event_operations_router
+from app.api.operations import gate_router
 from app.api.platform import router as platform_router
 from app.api.registration import router as registration_router
+from app.api.shared import router as shared_router
+from app.api.tickets import bulk_router as tickets_bulk_router
 from app.api.tickets import router as tickets_router
 from app.auth.corpus import CompromisedPasswordCorpus
 from app.auth.email import DisabledEmailDelivery, SmtpEmailDelivery
@@ -23,11 +27,13 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.engine import build_engine
 from app.events.service import EventService
+from app.operations.service import EventOperationsService
 from app.registration.service import RegistrationService
 from app.registration.throttle import DenyRegistrationLimiter, RedisRegistrationLimiter
 from app.tenancy.authority import AuthorityDenied, canonical_authority, trusted_client_address
 from app.tenancy.domains import DisabledDomainProvider, DomainService, FixtureDomainProvider
 from app.tenancy.platform_auth import PlatformAuth
+from app.tenancy.shared_host import CONTEXT_COOKIE, shared_host_tenant, verify_context
 from app.tickets.crypto import TicketKeyring, TicketKeyUnavailable
 from app.tickets.email import DisabledTicketTransport, LocalSmtpTicketTransport
 from app.tickets.service import TicketService
@@ -75,7 +81,30 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                         "detail": {"code": "UNRECOGNIZED_HOST", "message": "Host is unavailable"}
                     },
                 )
-            request.state.trusted_hostname = host
+            tenant_host = host
+            if (
+                settings.platform_host
+                and host == settings.platform_host
+                and not request.url.path.startswith("/api/v1/platform")
+            ):
+                tenant_context = verify_context(settings, request.cookies.get(CONTEXT_COOKIE, ""))
+                if tenant_context is not None:
+                    tenant_host = shared_host_tenant(tenant_context)
+                elif request.url.path not in {
+                    "/api/v1/auth/csrf",
+                    "/api/v1/auth/invitations/accept",
+                    "/api/v1/auth/password-reset/complete",
+                } and not request.url.path.startswith("/api/v1/shared/"):
+                    return JSONResponse(
+                        status_code=421,
+                        content={
+                            "detail": {
+                                "code": "TENANT_CONTEXT_REQUIRED",
+                                "message": "Choose an organization first",
+                            }
+                        },
+                    )
+            request.state.trusted_hostname = tenant_host
             request.state.trusted_origin = origin
             request.state.client_address = client_address
         return await call_next(request)
@@ -88,11 +117,13 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         if request.url.path.startswith(
             (
                 "/api/v1/auth",
+                "/api/v1/shared",
                 "/api/v1/platform",
                 "/api/v1/domains",
                 "/api/v1/events",
                 "/api/v1/branding",
                 "/api/v1/public",
+                "/api/v1/gate",
             )
         ):
             response.headers["Cache-Control"] = "no-store"
@@ -106,6 +137,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(branding_router)
     app.include_router(registration_router)
     app.include_router(tickets_router)
+    app.include_router(tickets_bulk_router)
+    app.include_router(shared_router)
+    app.include_router(event_operations_router)
+    app.include_router(gate_router)
+    app.state.settings = settings
     app.state.auth_service = None
     app.state.platform_auth = None
     app.state.domain_service = None
@@ -113,6 +149,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.branding_service = None
     app.state.registration_service = None
     app.state.ticket_service = None
+    app.state.event_operations_service = None
     app.state.email_delivery = DisabledEmailDelivery()
     branding_storage: BrandingStorage = UnavailableBrandingStorage()
     if identity_engine is not None:
@@ -165,6 +202,10 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             ticket_keys,
             ticket_transport,
             branding_storage,
+        )
+    if app.state.auth_service is not None:
+        app.state.event_operations_service = EventOperationsService(
+            database_engine, app.state.auth_service, ticket_keys
         )
     limiter = (
         RedisRegistrationLimiter(

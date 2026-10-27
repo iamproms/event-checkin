@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Dialog, Field, NavItem, Status, initializeTheme, setTheme, type Theme } from './ui';
+import { Button, Dialog, Field, NavItem, Status, ThemeControl } from './ui';
 import { getJson, ManagementApiError, mutateJson } from './management-api';
 import { eventLocal, eventUtc } from './event-time';
 import { describeEvent, type EventState } from './event-vocabulary';
@@ -10,6 +10,7 @@ import './event-management.css';
 type FormField = { key: string; label: string; type: 'text' | 'textarea' | 'select' | 'checkbox'; required: boolean; options?: string[] };
 type EventRecord = {
   id: string; slug: string; name: string; status: EventState; revision: number;
+  description?: string | null; registration_mode?: 'public' | 'import_only';
   starts_at: string; ends_at: string; timezone: string; location: string | null;
   registration_opens_at: string | null; registration_closes_at: string | null;
   checkin_opens_at: string | null; checkin_closes_at: string | null;
@@ -19,7 +20,8 @@ type Gate = { id: string; name: string; enabled: boolean };
 type Panel = 'overview' | 'settings' | 'form' | 'gates' | 'readiness';
 type Schedule = Pick<EventRecord, 'name' | 'location' | 'starts_at' | 'ends_at' | 'timezone' |
   'registration_opens_at' | 'registration_closes_at' | 'checkin_opens_at' | 'checkin_closes_at'>;
-const emptySchedule: Schedule = { name: '', location: '', starts_at: '', ends_at: '', timezone: 'Africa/Lagos',
+type EventDraft = Schedule & { description: string; registration_mode: 'public' | 'import_only' };
+const emptySchedule: EventDraft = { name: '', location: '', description: '', registration_mode: 'import_only', starts_at: '', ends_at: '', timezone: 'Africa/Lagos',
   registration_opens_at: null, registration_closes_at: null, checkin_opens_at: null, checkin_closes_at: null };
 
 function message(cause: unknown): string {
@@ -40,13 +42,11 @@ function DateField({ label: title, value, onChange, disabled = false, required =
 }
 
 function App() {
-  const [theme, setCurrentTheme] = useState<Theme>(initializeTheme);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [selected, setSelected] = useState<EventRecord | null>(null);
   const [panel, setPanel] = useState<Panel>('overview');
   const [createMode, setCreateMode] = useState(false);
-  const [slug, setSlug] = useState('');
-  const [schedule, setSchedule] = useState<Schedule>(emptySchedule);
+  const [schedule, setSchedule] = useState<EventDraft>(emptySchedule);
   const [fields, setFields] = useState<FormField[]>([]);
   const [gates, setGates] = useState<Gate[]>([]);
   const [gateName, setGateName] = useState('');
@@ -78,7 +78,7 @@ function App() {
   }, [selected?.id, panel]);
   function choose(event: EventRecord) {
     const local = (value: string | null) => value ? eventLocal(value, event.timezone) : null;
-    setSelected(event); setSchedule({ name: event.name, location: event.location, starts_at: eventLocal(event.starts_at, event.timezone),
+    setSelected(event); setSchedule({ name: event.name, location: event.location, description: event.description || '', registration_mode: event.registration_mode || 'public', starts_at: eventLocal(event.starts_at, event.timezone),
       ends_at: eventLocal(event.ends_at, event.timezone), timezone: event.timezone, registration_opens_at: local(event.registration_opens_at),
       registration_closes_at: local(event.registration_closes_at), checkin_opens_at: local(event.checkin_opens_at),
       checkin_closes_at: local(event.checkin_closes_at) });
@@ -104,6 +104,7 @@ function App() {
         ...schedule,
         starts_at: selected.starts_at, ends_at: selected.ends_at,
         timezone: selected.timezone,
+        registration_mode: selected.registration_mode || 'public',
         registration_opens_at: selected.registration_opens_at,
         registration_closes_at: selected.registration_closes_at,
         checkin_opens_at: selected.checkin_opens_at,
@@ -115,7 +116,7 @@ function App() {
         checkin_opens_at: convert(schedule.checkin_opens_at),
         checkin_closes_at: convert(schedule.checkin_closes_at) };
       if (createMode) {
-        const result = await mutateJson<EventRecord>('/api/v1/events', { ...prepared, slug,
+        const result = await mutateJson<EventRecord>('/api/v1/events', { ...prepared,
           registration_opens_at: undefined, registration_closes_at: undefined,
           checkin_opens_at: undefined, checkin_closes_at: undefined });
         await refresh(); choose(result); setNotice('Draft event created. Set its windows and gates before publishing.');
@@ -177,8 +178,7 @@ function App() {
   return <main className="event-management">
     <header className="event-header"><div><p className="brand"><TenantBrandMark area="Events" /></p>
       <h1>{createMode ? 'Create event' : selected ? selected.name : 'Events'}</h1></div>
-      <Button variant="secondary" onClick={() => { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); setCurrentTheme(next); }}>
-        Use {theme === 'light' ? 'dark' : 'light'} theme</Button></header>
+      <ThemeControl compact /></header>
     {error && <Status tone="danger" title="Action failed" instruction={error} announce="assertive" />}
     {notice && <Status tone="success" title="Updated" instruction={notice} announce="polite" />}
     {selected || createMode ? <div className="event-back"><Button variant="tertiary" onClick={() => {
@@ -186,7 +186,7 @@ function App() {
     }}>← All events</Button></div> : null}
     {!selected && !createMode && <section aria-label="Event overview">
       <div className="event-section-head"><div><h2>Your events</h2><p className="muted">Configure dates, registration and gates before publishing.</p></div>
-        <Button onClick={() => { setCreateMode(true); setSchedule(emptySchedule); setSlug(''); }}>Create event</Button></div>
+        <Button onClick={() => { setCreateMode(true); setSchedule(emptySchedule); }}>Create event</Button></div>
       {loading ? <p role="status">Loading events…</p> : events.length === 0 ? <Status tone="info" title="No events yet"
         instruction="Create a draft event to begin configuration." /> : <div className="event-list">
         {events.map((row) => <div className="event-row" key={row.id}>
@@ -214,19 +214,19 @@ function App() {
       {(createMode || panel === 'settings') && <section><h2>{createMode ? 'New event' : 'Event settings'}</h2>
         {selected && !editable && <p className="muted">Published dates and windows are fixed; only the name and location can change.</p>}
         <form className="event-form" onSubmit={saveSchedule}>
-          {createMode && <Field label="Event URL slug" value={slug} required pattern="[a-z0-9-]+" hint="Lowercase letters, numbers and hyphens."
-            onChange={(event) => setSlug(event.target.value)} />}
           <Field label="Event name" value={schedule.name} maxLength={160} required onChange={(event) => setSchedule({ ...schedule, name: event.target.value })} />
           <Field label="Location" value={schedule.location ?? ''} maxLength={300} onChange={(event) => setSchedule({ ...schedule, location: event.target.value })} />
+          <label className="event-select-label">Registration mode<select value={schedule.registration_mode} disabled={!!selected && !editable} onChange={(event) => setSchedule({ ...schedule, registration_mode: event.target.value as EventDraft['registration_mode'] })}><option value="import_only">CSV import only</option><option value="public">Public self-registration</option></select></label>
+          <label className="event-select-label">Description<textarea value={schedule.description} maxLength={2000} onChange={(event) => setSchedule({ ...schedule, description: event.target.value })} /></label>
           <Field label="IANA time zone" value={schedule.timezone} required hint="For example Africa/Lagos." onChange={(event) => setSchedule({ ...schedule, timezone: event.target.value })} disabled={!!selected && !editable} />
           <div className="event-field-grid">
             <DateField label="Event starts" value={schedule.starts_at} onChange={(value) => setSchedule({ ...schedule, starts_at: value })} disabled={!!selected && !editable} required />
             <DateField label="Event ends" value={schedule.ends_at} onChange={(value) => setSchedule({ ...schedule, ends_at: value })} disabled={!!selected && !editable} required />
           </div>
-          {!createMode && <><h3>Registration window</h3><div className="event-field-grid">
+          {!createMode && <>{schedule.registration_mode === 'public' && <><h3>Registration window</h3><div className="event-field-grid">
             <DateField label="Registration opens" value={schedule.registration_opens_at} onChange={(value) => setSchedule({ ...schedule, registration_opens_at: value })} disabled={!editable} />
             <DateField label="Registration closes" value={schedule.registration_closes_at} onChange={(value) => setSchedule({ ...schedule, registration_closes_at: value })} disabled={!editable} />
-          </div><h3>Single check-in window</h3><div className="event-field-grid">
+          </div></>}<h3>Single check-in window</h3><div className="event-field-grid">
             <DateField label="Check-in opens" value={schedule.checkin_opens_at} onChange={(value) => setSchedule({ ...schedule, checkin_opens_at: value })} disabled={!editable} />
             <DateField label="Check-in closes" value={schedule.checkin_closes_at} onChange={(value) => setSchedule({ ...schedule, checkin_closes_at: value })} disabled={!editable} />
           </div></>}

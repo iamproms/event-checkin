@@ -76,8 +76,9 @@ def test_platform_host_and_forwarded_spoofing_fail_closed() -> None:
         canonical_authority(
             request("tenant.example.test", "/api/v1/platform/auth/session"), settings
         )
-    with pytest.raises(AuthorityDenied):
-        canonical_authority(request("platform.example.test", "/api/v1/auth/session"), settings)
+    assert canonical_authority(
+        request("platform.example.test", "/api/v1/auth/session"), settings
+    )[0] == "platform.example.test"
     with pytest.raises(AuthorityDenied):
         canonical_authority(request(" tenant.example.test", "/api/v1/auth/session"), settings)
     with pytest.raises(AuthorityDenied):

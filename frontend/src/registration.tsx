@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Field, Status, initializeTheme, setTheme, type Theme } from './ui';
+import { Button, Field, Status, ThemeControl } from './ui';
 import './registration.css';
 
 type Question = { key: string; label: string; type: 'text' | 'textarea' | 'select' | 'checkbox'; required: boolean; options?: string[] };
@@ -19,7 +19,6 @@ function displayTime(instant: string, zone: string): string {
 }
 
 function App() {
-  const [theme, setCurrentTheme] = useState<Theme>(initializeTheme);
   const [event, setEvent] = useState<PublicEvent | null>(null);
   const [brand, setBrand] = useState<PublicBrand | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,18 +77,18 @@ function App() {
     <header className="registration-header">
       <span className="registration-mark">{brand?.logo_url && <img src={brand.logo_url} alt="" className="registration-logo" />}
         {brand?.display_name || 'Event Check-in'}</span>
-      <Button variant="tertiary" onClick={() => { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); setCurrentTheme(next); }}>
-        Use {theme === 'light' ? 'dark' : 'light'} theme
-      </Button>
+      <ThemeControl compact />
     </header>
     {loading && <Status tone="info" title="Loading event" instruction="Checking registration availability." announce="polite" />}
     {!loading && !event && <Status tone="warning" title="Event unavailable" instruction={error || 'Ask the organizer for a current registration link.'} announce="polite" />}
-    {event && <>
+    {event && <div className="registration-layout">
       <section className="registration-intro" aria-labelledby="event-title">
         <p className="registration-kicker" style={brand?.accent_color ? { borderColor: brand.accent_color } : undefined}>Registration</p>
         <h1 id="event-title">{event.name}</h1>
         <p className="registration-schedule">{displayTime(event.starts_at, event.timezone)}</p>
+        <p className="registration-end">Ends {displayTime(event.ends_at, event.timezone)}</p>
         {event.location && <p>{event.location}</p>}
+        <div className="registration-assurance"><strong>What happens next</strong><p>We will email your QR ticket if registration can be completed. Keep it private—it is a bearer credential.</p></div>
       </section>
       {complete ? <section className="registration-card"><Status tone="success" title="Request received"
         instruction="If your registration can be completed, your ticket will arrive by email. Check spam or ask the organizer for delivery help."
@@ -130,7 +129,7 @@ function App() {
           <p className="registration-muted">Need help with delivery? Contact the event organizer. Please do not submit again just to check your status.</p>
         </form>
       </section>}
-    </>}
+    </div>}
   </main>;
 }
 

@@ -2,22 +2,15 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../style.css';
 import './examples.css';
-import { Button, Dialog, Field, NavItem, Progress, Status, initializeTheme, setTheme, type Theme } from './index';
+import { Button, Dialog, Field, NavItem, Progress, Status, ThemeControl } from './index';
 
 function Examples() {
-  const [theme, updateTheme] = useState<Theme>(initializeTheme);
   const [compact, setCompact] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('Ọláwálé Adébáyọ̀');
 
-  function toggleTheme() {
-    const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next);
-    updateTheme(next);
-  }
-
   return <main className="examples" data-density={compact ? 'compact' : 'comfortable'}>
-    <header className="examples__header"><h1>UI primitives</h1><div className="examples__settings"><Button variant="secondary" onClick={toggleTheme}>Use {theme === 'light' ? 'dark' : 'light'} mode</Button><Button variant="secondary" onClick={() => setCompact(!compact)}>Use {compact ? 'comfortable' : 'compact'} density</Button></div></header>
+    <header className="examples__header"><h1>UI primitives</h1><div className="examples__settings"><ThemeControl /><Button variant="secondary" onClick={() => setCompact(!compact)}>Use {compact ? 'comfortable' : 'compact'} density</Button></div></header>
     <section aria-labelledby="type-heading"><h2 id="type-heading">Typography and content</h2><p className="examples__body">Ọláwálé Adébáyọ̀ · Chidinma Nwankwọ · ₦12,450.00 · coordinator-for-lagos-main-entrance@example.org</p><p className="examples__support">Exported attendee details expire 90 days after the event ends. Anonymous attendance totals remain available.</p></section>
     <section aria-labelledby="buttons-heading"><h2 id="buttons-heading">Buttons</h2><div className="examples__row"><Button>Continue</Button><Button variant="secondary">Review details</Button><Button variant="tertiary">View policy</Button><Button variant="destructive">Delete record</Button><Button touchCritical>Gate action</Button><Button disabled>Unavailable</Button><Button loading loadingText="Saving changes…">Save changes</Button></div></section>
     <section aria-labelledby="fields-heading"><h2 id="fields-heading">Fields</h2><div className="examples__fields"><Field label="Coordinator name" value={name} onChange={(event) => setName(event.target.value)} hint="Use the name shown on staff records." /><Field label="Contact email" type="email" value="invalid-address" readOnly error="Enter a valid email address to continue." /></div></section>

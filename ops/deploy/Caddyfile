@@ -1,0 +1,39 @@
+{
+	auto_https off
+	admin off
+}
+
+:{$PORT:10000} {
+	encode zstd gzip
+
+	@trusted_edge header X-Eventcheckin-Origin-Auth {$ORIGIN_AUTH_SECRET}
+	handle @trusted_edge {
+		@api path /api/* /health /ready
+		handle @api {
+			reverse_proxy 127.0.0.1:8000 {
+				header_up Host {http.request.header.X-Eventcheckin-Public-Host}
+				header_up X-Forwarded-For {http.request.header.X-Eventcheckin-Client-IP}
+				header_up -X-Forwarded-Host
+				header_up -Forwarded
+				header_up -X-Eventcheckin-Origin-Auth
+				header_up -X-Eventcheckin-Public-Host
+				header_up -X-Eventcheckin-Client-IP
+			}
+		}
+
+		handle {
+			root * /srv/web
+			try_files {path} {path}/ /index.html
+			file_server
+		}
+	}
+
+	respond 404
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+	}
+}

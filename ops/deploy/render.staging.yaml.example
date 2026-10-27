@@ -1,0 +1,82 @@
+# Deliberately an example rather than root render.yaml: G-06 must select the
+# region, providers, owned domains, and data-processing terms before sync.
+# Replace every REQUIRES_* value and validate with Render CLI >= 2.7.
+# Create the referenced least-privilege environment groups manually from
+# .env.staging.example; Blueprint environment groups cannot contain sync:false
+# secrets, so secret material is intentionally absent from this file.
+services:
+  - type: web
+    runtime: docker
+    name: event-checkin-web-staging
+    region: REQUIRES_G06_REGION
+    plan: 1c-2g
+    dockerfilePath: ./ops/deploy/Dockerfile.web
+    dockerContext: .
+    renderSubdomainPolicy: disabled
+    domains:
+      - REQUIRES_APPROVED_ORIGIN_DOMAIN
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - fromGroup: event-checkin-web-staging
+      - key: INGRESS_PROXY_IPS
+        value: 127.0.0.1
+      - key: ORIGIN_AUTH_SECRET
+        sync: false
+
+  - type: worker
+    runtime: docker
+    name: event-checkin-worker-staging
+    region: REQUIRES_G06_REGION
+    plan: 1c-2g
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.worker.celery_app:celery_app worker --loglevel=INFO --concurrency=4
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - fromGroup: event-checkin-worker-staging
+
+  - type: worker
+    runtime: docker
+    name: event-checkin-dispatcher-staging
+    region: REQUIRES_G06_REGION
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.worker.dispatcher
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: event-checkin-dispatcher-staging
+
+  - type: worker
+    runtime: docker
+    name: event-checkin-domain-maintenance-staging
+    region: REQUIRES_G06_REGION
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.tenancy.maintenance
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: event-checkin-domain-staging
+
+  - type: worker
+    runtime: docker
+    name: event-checkin-storage-maintenance-staging
+    region: REQUIRES_G06_REGION
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.worker.storage_maintenance
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: event-checkin-storage-staging
+
+  - type: keyvalue
+    name: event-checkin-redis-staging
+    region: REQUIRES_G06_REGION
+    plan: 1g
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot

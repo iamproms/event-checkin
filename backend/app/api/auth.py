@@ -12,6 +12,12 @@ from app.auth.address import single_email_address
 from app.auth.corpus import CorpusUnavailable
 from app.auth.email import DeliveryUnavailable
 from app.auth.service import AuthDenied, AuthService, Forbidden
+from app.tenancy.shared_host import (
+    CONTEXT_COOKIE,
+    CONTEXT_LIFETIME,
+    shared_host_tenant,
+    sign_context,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["staff authentication"])
 SESSION_COOKIE = "__Host-ecs_session"
@@ -39,6 +45,7 @@ class MfaBody(BaseModel):
 class PasswordBody(BaseModel):
     token: str
     password: str = Field(min_length=12, max_length=128)
+    tenant_id: UUID | None = None
 
 
 class ResetRequestBody(BaseModel):
@@ -50,6 +57,11 @@ class InvitationBody(BaseModel):
     role: str
     event_id: UUID | None = None
     gate_id: UUID | None = None
+
+
+class GateAssignmentBody(BaseModel):
+    event_id: UUID
+    gate_id: UUID
 
 
 def service(request: Request) -> AuthService:
@@ -176,6 +188,7 @@ def logout(
         auth.cancel_challenge(challenge)
     clear_cookie(response, SESSION_COOKIE)
     clear_cookie(response, CHALLENGE_COOKIE)
+    clear_cookie(response, CONTEXT_COOKIE)
     return {"state": "logged_out"}
 
 
@@ -260,8 +273,12 @@ def reset_complete(
     auth: AuthDependency,
 ) -> dict[str, str]:
     try:
+        shared = request.url.hostname == auth.settings.platform_host and body.tenant_id is not None
+        target_host = (
+            shared_host_tenant(body.tenant_id) if shared and body.tenant_id else hostname(request)
+        )
         auth.complete_reset(
-            hostname(request),
+            target_host,
             body.token,
             body.password,
             request.client.host if request.client else "unknown",
@@ -281,7 +298,8 @@ def invite(
     raw = request.cookies.get(SESSION_COOKIE, "")
     try:
         auth.issue_invitation(
-            hostname(request), raw, body.email, body.role, body.event_id, body.gate_id
+            hostname(request), raw, body.email, body.role, body.event_id, body.gate_id,
+            request.state.trusted_origin,
         )
     except (AuthDenied, DeliveryUnavailable, ValueError) as exc:
         raise handle_error(exc) from exc
@@ -296,7 +314,11 @@ def accept_invite(
     auth: AuthDependency,
 ) -> dict[str, str]:
     try:
-        state, token = auth.accept_invitation(hostname(request), body.token, body.password)
+        shared = request.url.hostname == auth.settings.platform_host and body.tenant_id is not None
+        target_host = (
+            shared_host_tenant(body.tenant_id) if shared and body.tenant_id else hostname(request)
+        )
+        state, token = auth.accept_invitation(target_host, body.token, body.password)
     except (AuthDenied, CorpusUnavailable, ValueError) as exc:
         raise handle_error(exc) from exc
     previous = request.cookies.get(SESSION_COOKIE)
@@ -304,6 +326,10 @@ def accept_invite(
         auth.logout(previous)
     clear_cookie(response, SESSION_COOKIE)
     clear_cookie(response, CHALLENGE_COOKIE)
+    if shared and body.tenant_id:
+        set_cookie(
+            response, CONTEXT_COOKIE, sign_context(auth.settings, body.tenant_id), CONTEXT_LIFETIME
+        )
     if state == "session":
         set_cookie(response, SESSION_COOKIE, token, 12 * 60 * 60)
     else:
@@ -321,6 +347,32 @@ def revoke_membership(
         auth.revoke_tenant_membership(
             hostname(request), request.cookies.get(SESSION_COOKIE, ""), user_id
         )
-    except AuthDenied as exc:
+    except (AuthDenied, Forbidden) as exc:
         raise handle_error(exc) from exc
     return {"state": "revoked"}
+
+
+@router.get("/gate-staff")
+def gate_staff(request: Request, auth: AuthDependency) -> dict[str, object]:
+    try:
+        staff = auth.list_gate_staff(hostname(request), request.cookies.get(SESSION_COOKIE, ""))
+    except (AuthDenied, Forbidden) as exc:
+        raise handle_error(exc) from exc
+    return {"staff": staff}
+
+
+@router.post("/memberships/{user_id}/gate-assignment", dependencies=[Depends(csrf)])
+def reassign_gate_staff(
+    user_id: UUID,
+    body: GateAssignmentBody,
+    request: Request,
+    auth: AuthDependency,
+) -> dict[str, str]:
+    try:
+        auth.reassign_gate_staff(
+            hostname(request), request.cookies.get(SESSION_COOKIE, ""),
+            user_id, body.event_id, body.gate_id,
+        )
+    except (AuthDenied, Forbidden) as exc:
+        raise handle_error(exc) from exc
+    return {"state": "assignment_updated"}

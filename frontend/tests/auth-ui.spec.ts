@@ -36,7 +36,7 @@ test('auth form reflows and passes automated accessibility checks in both themes
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   for (const theme of ['light', 'dark'] as const) {
-    if (theme === 'dark') await page.getByRole('button', { name: 'Use dark mode' }).click();
+    await page.getByLabel('Theme preference').selectOption(theme);
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze();
     expect(results.violations).toEqual([]);
   }

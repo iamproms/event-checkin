@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Field, Status, initializeTheme, setTheme, type Theme } from './ui';
+import { Button, Field, Status, ThemeControl } from './ui';
 import { describeDomain, type DomainState } from './domain-vocabulary';
 import { getJson, ManagementApiError, mutateJson } from './management-api';
 import { TenantBrandMark } from './tenant-brand';
@@ -9,7 +9,6 @@ import './management.css';
 type ClaimResult = { domain_id: string; dns_record: string; dns_value: string };
 
 function App() {
-  const [theme, setCurrentTheme] = useState<Theme>(initializeTheme);
   const [domains, setDomains] = useState<DomainState[]>([]);
   const [hostname, setHostname] = useState('');
   const [proof, setProof] = useState<ClaimResult | null>(null);
@@ -44,14 +43,9 @@ function App() {
       setNotice('Add the TXT proof, then request a domain check. Platform approval controls activation.');
     });
   }
-  function changeTheme() {
-    const next = theme === 'light' ? 'dark' : 'light';
-    setTheme(next); setCurrentTheme(next);
-  }
-
   return <main className="management">
     <header><p className="brand"><TenantBrandMark area="Domains" /></p>
-      <Button variant="secondary" onClick={changeTheme}>Use {theme === 'light' ? 'dark' : 'light'} theme</Button>
+      <ThemeControl compact />
     </header>
     <h1>Web domains</h1>
     <p className="intro">Verify ownership before a platform administrator activates a custom hostname.</p>

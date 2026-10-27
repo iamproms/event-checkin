@@ -12,6 +12,6 @@ export function TenantBrandMark({ area }: { area: string }) {
   }, []);
   return <span className="tenant-brand-mark">
     {brand?.logo_url && <img src={brand.logo_url} alt="" className="tenant-brand-mark__logo" />}
-    <span>{brand?.display_name || 'Event Check-in'} / {area}</span>
+    <a href="/workspace.html">{brand?.display_name || 'Event Check-in'}</a><span aria-hidden="true">/</span><span>{area}</span>
   </span>;
 }

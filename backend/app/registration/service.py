@@ -149,6 +149,10 @@ class RegistrationService:
                 )
                 if event is None:
                     raise RegistrationUnavailable("Event unavailable")
+                if event.registration_mode == "import_only":
+                    raise RegistrationUnavailable(
+                        "Online registration is unavailable for this event"
+                    )
                 instant = now or datetime.now(UTC)
                 notice = _notice(db, event.tenant_id)
                 form = db.scalar(
@@ -225,6 +229,10 @@ class RegistrationService:
                 )
                 if scope_event is None:
                     raise RegistrationUnavailable("Event unavailable")
+                if scope_event.registration_mode == "import_only":
+                    raise RegistrationUnavailable(
+                        "Online registration is unavailable for this event"
+                    )
                 rate_scope = (scope_event.tenant_id, scope_event.id)
             if not self.rate_limiter.allow(*rate_scope, peer):
                 raise RegistrationLimited("Please wait before trying again")
@@ -236,6 +244,10 @@ class RegistrationService:
                 )
                 if event is None:
                     raise RegistrationUnavailable("Event unavailable")
+                if event.registration_mode == "import_only":
+                    raise RegistrationUnavailable(
+                        "Online registration is unavailable for this event"
+                    )
                 now = db.scalar(text("SELECT clock_timestamp()"))
                 if (
                     event.registration_opens_at is None
