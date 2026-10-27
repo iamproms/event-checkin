@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Field, Status, ThemeControl } from './ui';
+import { Button, Field, Skeleton, Status, ThemeControl } from './ui';
 import { describeDomain, type DomainState } from './domain-vocabulary';
 import { getJson, ManagementApiError, mutateJson } from './management-api';
 import { TenantBrandMark } from './tenant-brand';
@@ -13,6 +13,7 @@ function App() {
   const [hostname, setHostname] = useState('');
   const [proof, setProof] = useState<ClaimResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -22,7 +23,7 @@ function App() {
   }
   useEffect(() => { void load().catch((cause) => {
     setError(cause instanceof Error ? cause.message : 'Could not load domains');
-  }); }, []);
+  }).finally(() => setLoading(false)); }, []);
   async function perform(action: () => Promise<void>) {
     if (busy) return;
     setBusy(true); setError(''); setNotice('');
@@ -47,10 +48,12 @@ function App() {
     <header><p className="brand"><TenantBrandMark area="Domains" /></p>
       <ThemeControl compact />
     </header>
+    <nav className="management-nav" aria-label="Organization settings"><a href="/branding.html">Branding</a><a aria-current="page" href="/domains.html">Domains</a><a href="/workspace.html#settings">All settings</a></nav>
     <h1>Web domains</h1>
     <p className="intro">Verify ownership before a platform administrator activates a custom hostname.</p>
     {error && <Status tone="danger" title="Action failed" instruction={error} announce="assertive" />}
     {notice && <Status tone="info" title="Next step" instruction={notice} announce="polite" />}
+    {busy && <p className="operation-progress" role="status">Updating domain status…</p>}
     <section><h2>Request a domain claim</h2>
       <form className="stack" onSubmit={claim}>
         <Field label="Custom hostname" type="text" autoComplete="url" value={hostname}
@@ -64,7 +67,7 @@ function App() {
       </div>}
     </section>
     <section><h2>Current domains</h2>
-      {domains.length === 0 && <p className="muted">No domains are available to this account.</p>}
+      {loading ? <Skeleton lines={4} label="Loading domains" /> : domains.length === 0 && <p className="muted">No domains are available to this account.</p>}
       {domains.map((domain) => {
         const message = describeDomain(domain);
         return <div className="domain-row" key={domain.id}>

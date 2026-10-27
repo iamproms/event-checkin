@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Button, Field, Status, ThemeControl } from './ui';
+import { safeMessageForStatus } from './safe-error';
 import './registration.css';
 
 type Question = { key: string; label: string; type: 'text' | 'textarea' | 'select' | 'checkbox'; required: boolean; options?: string[] };
@@ -65,8 +66,7 @@ function App() {
         notice_acknowledged: acknowledged, marketing_opt_in: marketing }),
     }).then(async (response) => {
       if (!response.ok) {
-        const result = await response.json() as { detail?: { message?: string } };
-        throw new Error(result.detail?.message || 'Registration could not be completed. Try again.');
+        throw new Error(safeMessageForStatus(response.status, 'Registration could not be completed. Try again.'));
       }
       setComplete(true);
     }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Registration could not be completed.'))

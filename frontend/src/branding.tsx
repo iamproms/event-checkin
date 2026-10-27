@@ -1,7 +1,8 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Dialog, Field, Status, ThemeControl } from './ui';
+import { Button, Dialog, Field, Skeleton, Status, ThemeControl } from './ui';
 import { getJson, ManagementApiError, mutateJson } from './management-api';
+import { safeErrorMessage, safeMessageForStatus } from './safe-error';
 import { TenantBrandMark } from './tenant-brand';
 import './branding.css';
 
@@ -50,6 +51,7 @@ function App() {
   const [versions, setVersions] = useState<Version[]>([]);
   const [audit, setAudit] = useState<Audit[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirm, setConfirm] = useState<{ action: 'publish' | 'restore'; version?: number } | null>(null);
@@ -65,7 +67,7 @@ function App() {
     cause instanceof ManagementApiError && [401, 403].includes(cause.status)
       ? 'Branding access is unavailable. Sign in to a tenant owner or administrator account.'
       : 'Could not load branding. Try again.'
-  )); }, []);
+  )).finally(() => setLoading(false)); }, []);
 
   async function perform(action: () => Promise<void>) {
     if (busy) return;
@@ -75,7 +77,7 @@ function App() {
       if (cause instanceof ManagementApiError && [401, 403].includes(cause.status)) {
         setSaved(null); setEditor(null); setVersions([]); setAudit([]);
         setError('Branding access is unavailable. Sign in to an authorized tenant again.');
-      } else setError(cause instanceof Error ? cause.message : 'The request failed.');
+      } else setError(safeErrorMessage(cause, 'The branding action could not be completed.'));
     }
     finally { setBusy(false); setConfirm(null); }
   }
@@ -98,18 +100,20 @@ function App() {
       headers: { 'content-type': file.type, 'x-csrf-token': csrf.csrf_token }, body: file,
     });
     const result = await response.json() as Branding & { detail?: { message?: string } };
-    if (!response.ok) throw new ManagementApiError(result.detail?.message || 'Logo upload failed', response.status);
+    if (!response.ok) throw new ManagementApiError(safeMessageForStatus(response.status, 'The logo could not be uploaded.'), response.status);
     setSaved(result); setNotice('Logo added to the draft. Publish to make it visible to attendees.');
   }
 
   return <main className="management branding-main">
     <header><p className="brand"><TenantBrandMark area="Branding" /></p>
       <ThemeControl compact /></header>
+    <nav className="management-nav" aria-label="Organization settings"><a aria-current="page" href="/branding.html">Branding</a><a href="/domains.html">Domains</a><a href="/workspace.html#settings">All settings</a></nav>
     <h1>Tenant branding</h1>
     <p className="intro branding-intro">Give your registration and ticket experience a clear identity. Changes stay in a draft until you publish them.</p>
     {error && <Status tone="danger" title="Action failed" instruction={error} announce="assertive" />}
     {notice && <Status tone="info" title="Update" instruction={notice} announce="polite" />}
-    {!editor || !saved ? <Status tone="info" title="Branding unavailable" instruction="Refresh after signing in to an authorized tenant." /> : <>
+    {busy && <p className="operation-progress" role="status">Applying the requested branding change…</p>}
+    {loading ? <Skeleton lines={6} label="Loading branding editor" /> : !editor || !saved ? <Status tone="info" title="Branding unavailable" instruction="Refresh after signing in to an authorized tenant." /> : <>
       <section><h2>Identity and colors</h2>
         <form onSubmit={save} className="branding-fields">
           <Field className="wide" label="Display name" value={editor.display_name} required maxLength={120}
@@ -137,7 +141,7 @@ function App() {
           const response = await fetch('/api/v1/branding/logo', { method: 'DELETE', credentials: 'same-origin',
             headers: { 'x-csrf-token': csrf.csrf_token } });
           const result = await response.json() as Branding & { detail?: { message?: string } };
-          if (!response.ok) throw new ManagementApiError(result.detail?.message || 'Logo removal failed', response.status);
+          if (!response.ok) throw new ManagementApiError(safeMessageForStatus(response.status, 'The draft logo could not be removed.'), response.status);
           setSaved(result); setNotice('Logo removed from the draft. Publish to remove it from attendee views.');
         })}>Remove draft logo</Button></div>}
       </section>
