@@ -88,6 +88,53 @@ This file records the work completed on `feat/platform-ui-ux-overhaul`. Entries 
 - Renamed the overview action to “Open provisioning” after the full suite identified an accessible-name collision with the Organizations navigation link.
 - The interrupted organizer workflow edits remain outside the Phase 2 commits and are documented for Phase 3 review.
 
+## 2026-10-27: Phase 3 core workflows
+
+### Organizer overview and events
+
+- Replaced the attendance-first dashboard with an event-aware operational overview using only selected-event and attendance API data.
+- Added event context, lifecycle, schedule, location, registration mode, and direct next actions without invented activity.
+- Added validated event editor deep links through `/events.html?event=<id>` while retaining the existing event APIs and editor panels.
+- Routed unexpected event-editor failures through the shared safe error mapper.
+
+### Participants and import
+
+- Improved selected-event context, loading, search-empty, error, pagination, ticket-status, and import-entry states.
+- Converted internal import validation codes into readable corrective messages.
+- Added determinate progress feedback for background import processing and explicit completion feedback.
+- Preserved custom-field mapping, notice version, lawful basis, duplicate handling, and import API payloads.
+
+### Tickets
+
+- Replaced UUID-first ticket lookup with the selected event's participant directory.
+- Added server-authoritative delivery summaries, email preview, operation notices, and explanations for disabled issue and email actions.
+- Added shared confirmation dialogs for issue, send, resend, reissue, and revoke operations.
+- Kept event and registration identifiers available inside collapsed support details.
+- Cleared participant selection when the event changes so a registration is never queried under a stale event.
+
+### Live attendance and gate staff
+
+- Separated overview, live attendance, and export compositions.
+- Added proportional gate-throughput bars, recent outcome status, freshness, export progress, and export success feedback using returned API values.
+- Added gate and staff loading, empty, error, disabled, and invitation-success states.
+- Replaced native assignment and revocation confirmation with the shared focus-restoring dialog.
+
+### Verification
+
+- TypeScript: passed.
+- ESLint: passed.
+- Token tests: passed, 2 tests.
+- Full Playwright suite: passed, 41 tests.
+- Added tests for event editor deep links, readable import issues, participant-based ticket operations, dialog focus restoration, and 320 px organizer workflow reflow.
+- Automated WCAG 2.2 AA checks passed for participants, tickets, live attendance, and gate staff at 320 px.
+- Taste source linter: 0 failures and 8 advisory warnings; the advisory categories are unchanged from Phase 2.
+- Visually inspected organizer overview and tickets at desktop, live attendance at tablet width, and participants and gate staff at mobile width.
+- Added review captures under `docs/screenshots/phase3-*.png`.
+
+### Approval boundary
+
+- Phase 3 is complete for review. Phase 4 supporting interfaces have not begun.
+
 ## Backend dependencies
 
 - Structured authentication lockout reason and retry metadata.
