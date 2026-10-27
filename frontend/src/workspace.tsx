@@ -2,11 +2,14 @@ import { StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AppShell, type NavItem } from './product/AppShell';
 import { capabilities } from './product/capabilities';
-import { ButtonLink, CapabilityNotice, DataTable, EmptyState, PageHeader, SectionHeader, SettingRow, StatusMark } from './product/components';
-import { useHashRoute } from './product/router';
+import { ButtonLink, CapabilityNotice, DataTable, EmptyState, ErrorState, FilterBar, MetricStrip, PageHeader, SectionHeader, SettingRow, StatusMark } from './product/components';
+import { routeHref, useHashRoute } from './product/router';
 import { EventWorkspaceProvider, useEventWorkspace } from './product/EventWorkspaceContext';
 import { getJson, mutateJson } from './management-api';
-import { AttendanceDashboard, EventPicker, GateStaffWorkspace, LiveEventsDirectory, ParticipantsWorkspace, useEvents } from './features/event-critical';
+import { AttendanceDashboard, EventPicker, GateStaffWorkspace, LiveEventsDirectory, OrganizerOverview, ParticipantsWorkspace, useEvents } from './features/event-critical';
+import { eventApi, type Participant } from './event-api';
+import { Dialog } from './ui';
+import { safeErrorMessage } from './safe-error';
 import './product/product.css';
 
 const nav: NavItem[] = [
@@ -18,7 +21,7 @@ const nav: NavItem[] = [
 ];
 
 function Dashboard() {
-  return <AttendanceDashboard />;
+  return <OrganizerOverview />;
 }
 
 const Events = LiveEventsDirectory;
@@ -26,6 +29,7 @@ const Attendees = ParticipantsWorkspace;
 
 type TicketState = { ticket_status: string; delivery_status: string; delivery_error?: string | null };
 type BulkTicketState = { registered: number; issued: number; queued: number; sent: number; delivered: number; failed: number };
+function humanize(value: string) { return value.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase()); }
 function Tickets() {
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   const { events, selectedEventId: activeBulkEvent, setSelectedEventId } = useEvents();
@@ -35,34 +39,56 @@ function Tickets() {
   const [bulkError, setBulkError] = useState('');
   const [bulkNotice, setBulkNotice] = useState('');
   const [showEmailPreview, setShowEmailPreview] = useState(false);
-  const [eventId, setEventId] = useState(params.get('event') || ''); const [registrationId, setRegistrationId] = useState(params.get('registration') || '');
+  const [participants, setParticipants] = useState<Participant[]>([]); const [participantsLoading, setParticipantsLoading] = useState(false); const [participantsError, setParticipantsError] = useState(''); const [query, setQuery] = useState('');
+  const [registrationId, setRegistrationId] = useState(params.get('registration') || '');
   const [ticket, setTicket] = useState<TicketState | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const [confirmation, setConfirmation] = useState<{ action: 'issue'|'send'|'resend'|'reissue'|'revoke'; title: string; description: string } | null>(null);
+  const eventId = activeBulkEvent;
   const path = `/api/v1/events/${encodeURIComponent(eventId)}/registrations/${encodeURIComponent(registrationId)}/ticket`;
-  async function load() { setBusy(true); setError(''); try { setTicket(await getJson<TicketState>(path)); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Ticket could not be loaded.'); } finally { setBusy(false); } }
-  async function command(action: 'resend'|'reissue'|'revoke') { setBusy(true); setError(''); try { setTicket(await mutateJson<TicketState>(`${path}/${action}`, {})); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Ticket action failed.'); } finally { setBusy(false); } }
-  async function refreshBulk() { if (!activeBulkEvent) return; setBulkBusy(true); setBulkError(''); try { setBulkState(await getJson<BulkTicketState>(`/api/v1/events/${encodeURIComponent(activeBulkEvent)}/tickets/bulk`)); } catch (cause) { setBulkError(cause instanceof Error ? cause.message : 'Ticket totals could not be loaded.'); } finally { setBulkBusy(false); } }
+  async function load() { if (!eventId || !registrationId) return; setBusy(true); setError(''); try { setTicket(await getJson<TicketState>(path)); } catch (cause) { setTicket(null); setError(safeErrorMessage(cause, 'Ticket state could not be loaded.')); } finally { setBusy(false); } }
+  async function command(action: 'resend'|'reissue'|'revoke') { setBusy(true); setError(''); try { setTicket(await mutateJson<TicketState>(`${path}/${action}`, {})); await Promise.all([refreshBulk(), refreshParticipants()]); } catch (cause) { setError(safeErrorMessage(cause, 'The ticket action could not be completed.')); } finally { setBusy(false); } }
+  async function refreshBulk() { if (!activeBulkEvent) return; setBulkBusy(true); setBulkError(''); try { setBulkState(await getJson<BulkTicketState>(`/api/v1/events/${encodeURIComponent(activeBulkEvent)}/tickets/bulk`)); } catch (cause) { setBulkError(safeErrorMessage(cause, 'Ticket totals could not be loaded.')); } finally { setBulkBusy(false); } }
+  async function refreshParticipants() { if (!activeBulkEvent) return; setParticipantsLoading(true); setParticipantsError(''); try { setParticipants((await eventApi.participants(activeBulkEvent, '', 0)).registrations); } catch (cause) { setParticipantsError(safeErrorMessage(cause, 'Participants could not be loaded.')); } finally { setParticipantsLoading(false); } }
   useEffect(() => { setBulkState(null); if (activeBulkEvent) void refreshBulk(); }, [activeBulkEvent]);
-  useEffect(() => { if (activeBulkEvent) setEventId(activeBulkEvent); }, [activeBulkEvent]);
+  useEffect(() => { setParticipants([]); setTicket(null); if (activeBulkEvent) void refreshParticipants(); }, [activeBulkEvent]);
+  useEffect(() => { if (activeBulkEvent && registrationId) void load(); }, [activeBulkEvent, registrationId]);
   async function bulkCommand(action: 'issue' | 'send') {
     if (!activeBulkEvent) return;
-    const text = action === 'issue' ? 'Queue secure QR issuance for eligible imported registrations?' : 'Queue transactional ticket email for all issued imported tickets without a prior send? Confirm the approved notice, sender, and test transport before continuing.';
-    if (!window.confirm(text)) return;
     setBulkBusy(true); setBulkError(''); setBulkNotice('');
     try { const result = await mutateJson<Record<string, number>>(`/api/v1/events/${encodeURIComponent(activeBulkEvent)}/tickets/bulk/${action}`, {}); setBulkNotice(action === 'issue' ? `${result.queued_or_existing ?? 0} eligible registrations are queued or already issued.` : `${result.newly_queued ?? 0} new messages queued. “Sent” means provider acceptance, not inbox delivery.`); setBulkState(await getJson<BulkTicketState>(`/api/v1/events/${encodeURIComponent(activeBulkEvent)}/tickets/bulk`)); }
-    catch (cause) { setBulkError(cause instanceof Error ? cause.message : 'The bulk action failed.'); }
+    catch (cause) { setBulkError(safeErrorMessage(cause, 'The bulk action could not be completed.')); }
     finally { setBulkBusy(false); }
   }
-  return <><PageHeader eyebrow={bulkEvent?.name || 'Event operations'} title="Tickets" description="Inspect delivery state and use credential-safe support actions." /><CapabilityNotice capability={capabilities.tickets}>Ticket commands are live only when an authorized operator supplies an existing event and registration ID. Credentials are never returned here.</CapabilityNotice>
+  function selectParticipant(participant: Participant) {
+    setRegistrationId(participant.id); setTicket(null); setError('');
+    history.replaceState(history.state, '', routeHref('tickets', { event: activeBulkEvent, registration: participant.id }));
+  }
+  function selectTicketEvent(eventId: string) {
+    setRegistrationId(''); setTicket(null); setError(''); setQuery(''); setSelectedEventId(eventId);
+    history.replaceState(history.state, '', routeHref('tickets', { event: eventId, registration: null }));
+  }
+  async function confirmAction() {
+    if (!confirmation) return;
+    const action = confirmation.action; setConfirmation(null);
+    if (action === 'issue' || action === 'send') await bulkCommand(action);
+    else await command(action);
+  }
+  const selectedParticipant = participants.find(participant => participant.id === registrationId);
+  const filteredParticipants = participants.filter(participant => `${participant.full_name} ${participant.email}`.toLowerCase().includes(query.toLowerCase()));
+  return <><PageHeader eyebrow={bulkEvent?.name || 'Event operations'} title="Tickets" description="Issue credentials, review delivery, and resolve ticket problems." /><CapabilityNotice capability={capabilities.tickets}>Ticket state and actions are server-authoritative. QR credentials are never returned to this workspace.</CapabilityNotice>
     <section className="panel-section"><SectionHeader title="Imported attendee tickets" description="Issue first, review the message, then queue email separately." />
-      <div className="toolbar-row"><EventPicker events={events} value={activeBulkEvent} onChange={setSelectedEventId}/><button className="product-button product-button--secondary" disabled={bulkBusy || !activeBulkEvent} onClick={() => void refreshBulk()}>{bulkBusy ? 'Refreshing…' : 'Refresh progress'}</button></div>
-      {bulkState && <DataTable label="Imported ticket progress" columns={['Registrations','Issued','Queued','Provider accepted','Delivered signal','Failed']} rows={[[bulkState.registered,bulkState.issued,bulkState.queued,bulkState.sent,bulkState.delivered,bulkState.failed]]} />}
-      <div className="page-actions"><button className="product-button" disabled={bulkBusy || !activeBulkEvent || bulkEvent?.status !== 'published'} onClick={() => void bulkCommand('issue')}>Issue QR tickets</button><button className="product-button product-button--secondary" disabled={!activeBulkEvent} onClick={() => setShowEmailPreview(value => !value)}>{showEmailPreview ? 'Hide email preview' : 'Preview ticket email'}</button><button className="product-button" disabled={bulkBusy || !activeBulkEvent || !bulkState?.issued} onClick={() => void bulkCommand('send')}>Queue ticket emails</button></div>
+      <div className="toolbar-row"><EventPicker events={events} value={activeBulkEvent} onChange={selectTicketEvent}/><button className="product-button product-button--secondary" aria-busy={bulkBusy || undefined} disabled={bulkBusy || !activeBulkEvent} onClick={() => void refreshBulk()}>{bulkBusy ? 'Refreshing…' : 'Refresh progress'}</button></div>
+      {bulkState ? <MetricStrip metrics={[{label:'Registrations',value:String(bulkState.registered),detail:'Imported records'},{label:'Issued',value:String(bulkState.issued),detail:'Active credentials'},{label:'Email queued',value:String(bulkState.queued),detail:'Waiting for provider'},{label:'Delivery issues',value:String(bulkState.failed),detail:`${bulkState.sent} accepted · ${bulkState.delivered} delivered`}]} /> : <DataTable label="Loading ticket totals" columns={['Registrations','Issued','Queued','Delivery']} rows={[]} loading={bulkBusy} emptyMessage="Ticket totals are unavailable." />}
+      <div className="page-actions"><button className="product-button" aria-busy={bulkBusy || undefined} disabled={bulkBusy || !activeBulkEvent || bulkEvent?.status !== 'published'} aria-describedby={bulkEvent && bulkEvent.status !== 'published' ? 'ticket-issue-reason' : undefined} onClick={() => setConfirmation({action:'issue',title:'Issue QR tickets?',description:`Create secure credentials for eligible registrations in ${bulkEvent?.name || 'this event'}. Existing tickets remain unchanged.`})}>Issue QR tickets</button><button className="product-button product-button--secondary" disabled={!activeBulkEvent} onClick={() => setShowEmailPreview(value => !value)}>{showEmailPreview ? 'Hide email preview' : 'Preview ticket email'}</button><button className="product-button" aria-busy={bulkBusy || undefined} disabled={bulkBusy || !activeBulkEvent || !bulkState?.issued} aria-describedby={bulkState && !bulkState.issued ? 'ticket-email-reason' : undefined} onClick={() => setConfirmation({action:'send',title:'Queue ticket emails?',description:'Queue transactional email for issued imported tickets without a prior send. Provider acceptance does not prove inbox delivery.'})}>Queue ticket emails</button></div>
+      {bulkEvent && bulkEvent.status !== 'published' && <p className="control-note" id="ticket-issue-reason">Publish this event before issuing QR tickets.</p>}
+      {bulkState && !bulkState.issued && <p className="control-note" id="ticket-email-reason">Issue at least one ticket before queueing ticket email.</p>}
       {showEmailPreview && <div className="ticket-email-preview"><p><strong>Preview only · no recipient or credential</strong></p><h3>Your ticket for {bulkEvent?.name || 'the event'}</h3><p>{bulkEvent?.starts_at ? new Date(bulkEvent.starts_at).toLocaleString() : 'Event date'} · {bulkEvent?.location || 'Venue to be confirmed'}</p><p>Present your unique QR code at the gate. Keep it private; the first valid scan uses it.</p><p>For ticket help, contact the event organizer.</p><p>The delivery worker inserts each attendee’s unique QR image. This preview does not send email.</p></div>}
-      {bulkNotice && <p role="status">{bulkNotice}</p>}{bulkError && <p className="request-error" role="alert">{bulkError}</p>}
+      {bulkNotice && <p className="success-banner" role="status">{bulkNotice}</p>}{bulkError && <ErrorState title="Ticket operation unavailable" description={bulkError} onRetry={() => void refreshBulk()} />}
     </section>
-    <SettingRow title="Find a ticket" description="Use known identifiers from an approved support workflow. The backend has no ticket directory yet."><label>Event ID<input placeholder="Event UUID" value={eventId} onChange={event=>setEventId(event.target.value)} /></label><label>Registration ID<input placeholder="Registration UUID" value={registrationId} onChange={event=>setRegistrationId(event.target.value)} /></label><button className="product-button" type="button" disabled={busy || !eventId || !registrationId} onClick={()=>void load()}>{busy?'Loading…':'Load ticket state'}</button>{error && <p role="alert" className="status-mark status-mark--danger">{error}</p>}</SettingRow>
-    <section className="panel-section"><SectionHeader title="Credential lifecycle" description="Support actions preserve the bearer-credential security contract." /><DataTable label="Ticket action behavior" columns={['Action','Credential','Delivery','Confirmation']} rows={[[<strong>Resend</strong>,'Keeps active credential','Creates idempotent delivery','Required'],[<strong>Reissue</strong>,'Revokes previous credential','Creates replacement delivery','Required'],[<strong>Revoke</strong>,'Prevents future redemption','No new delivery','Required']]} /></section>
-    {ticket ? <section className="panel-section"><SectionHeader title="Authoritative ticket state" description="The credential itself is never returned."/><DataTable label="Ticket state" columns={['Ticket','Delivery','Provider error']} rows={[[<StatusMark tone={ticket.ticket_status==='active'?'success':'danger'}>{ticket.ticket_status}</StatusMark>,<StatusMark tone={ticket.delivery_status==='sent'||ticket.delivery_status==='delivered'?'success':ticket.delivery_status==='failed'?'danger':'warning'}>{ticket.delivery_status}</StatusMark>,ticket.delivery_error || '—']]} /><div className="page-actions" style={{marginTop:16}}><button className="product-button product-button--secondary" disabled={busy} onClick={()=>void command('resend')}>Resend</button><button className="product-button product-button--secondary" disabled={busy} onClick={()=>confirm('Reissue this ticket and revoke its current credential?')&&void command('reissue')}>Reissue</button><button className="product-button" disabled={busy || ticket.ticket_status!=='active'} onClick={()=>confirm('Revoke this ticket? It will no longer be redeemable.')&&void command('revoke')}>Revoke</button></div></section> : <EmptyState icon="tickets" title="No ticket loaded" description="Enter both identifiers to inspect authoritative ticket and delivery state. A ticket preview is intentionally unavailable because the API never exposes credentials." />}
+    <section className="panel-section"><SectionHeader title="Participant tickets" description="Choose a participant to inspect current ticket and delivery state."/><FilterBar placeholder="Search participant or email" value={query} onChange={setQuery} count={participantsLoading ? 'Loading…' : `${filteredParticipants.length} participants`}><button className="product-button product-button--secondary" onClick={() => void refreshParticipants()} disabled={participantsLoading || !activeBulkEvent}>Refresh</button></FilterBar>{participantsError ? <ErrorState title="Participants unavailable" description={participantsError} onRetry={() => void refreshParticipants()} /> : <DataTable label="Participant tickets" loading={participantsLoading && !participants.length} emptyMessage={query ? 'No participant matches this search.' : 'Participants will appear after registration or import.'} columns={['Participant','Ticket','Delivery','Action']} rows={filteredParticipants.map(participant => [<span>{participant.full_name || participant.email}<br/>{participant.full_name && <small>{participant.email}</small>}</span>,<StatusMark tone={participant.ticket_status === 'active' ? 'success' : 'warning'}>{humanize(participant.ticket_status || 'not issued')}</StatusMark>,<StatusMark tone={['sent','delivered'].includes(participant.delivery_status || '') ? 'success' : participant.delivery_status === 'failed' ? 'danger' : 'warning'}>{humanize(participant.delivery_status || 'not queued')}</StatusMark>,<button className="product-button product-button--secondary" onClick={() => selectParticipant(participant)}>Manage</button>])}/>}</section>
+    {error && <ErrorState title="Ticket unavailable" description={error} onRetry={registrationId ? () => void load() : undefined} />}
+    {ticket ? <section className="panel-section"><SectionHeader title={selectedParticipant ? `${selectedParticipant.full_name || selectedParticipant.email}'s ticket` : 'Authoritative ticket state'} description="The credential itself is never returned."/><DataTable label="Ticket state" columns={['Ticket','Delivery','Delivery detail']} rows={[[<StatusMark tone={ticket.ticket_status==='active'?'success':'danger'}>{humanize(ticket.ticket_status)}</StatusMark>,<StatusMark tone={ticket.delivery_status==='sent'||ticket.delivery_status==='delivered'?'success':ticket.delivery_status==='failed'?'danger':'warning'}>{humanize(ticket.delivery_status)}</StatusMark>,ticket.delivery_error ? 'The delivery provider reported a failure.' : 'No provider error reported']]} /><div className="page-actions" style={{marginTop:16}}><button className="product-button product-button--secondary" disabled={busy} onClick={() => setConfirmation({action:'resend',title:'Resend this ticket?',description:'Keep the active credential and create an idempotent delivery request.'})}>Resend</button><button className="product-button product-button--secondary" disabled={busy} onClick={() => setConfirmation({action:'reissue',title:'Reissue this ticket?',description:'Revoke the current credential, create a replacement, and queue new delivery.'})}>Reissue</button><button className="product-button" disabled={busy || ticket.ticket_status!=='active'} onClick={() => setConfirmation({action:'revoke',title:'Revoke this ticket?',description:'The current credential will stop working immediately. No replacement is issued.'})}>Revoke</button></div><details className="support-details"><summary>Support identifiers</summary><dl><div><dt>Event ID</dt><dd><code>{eventId}</code></dd></div><div><dt>Registration ID</dt><dd><code>{registrationId}</code></dd></div></dl></details></section> : busy && registrationId ? <section className="panel-section"><DataTable label="Loading ticket state" columns={['Ticket','Delivery','Delivery detail']} rows={[]} loading /></section> : <EmptyState icon="tickets" title="Choose a participant" description="Select Manage in the participant ticket directory to inspect server-authoritative state." />}
+    <Dialog open={!!confirmation} onClose={() => setConfirmation(null)} title={confirmation?.title || 'Confirm ticket action'} description={confirmation?.description}><div className="dialog-actions"><button className="product-button product-button--secondary" onClick={() => setConfirmation(null)}>Cancel</button><button className="product-button" onClick={() => void confirmAction()}>{confirmation?.action === 'issue' ? 'Issue tickets' : confirmation?.action === 'send' ? 'Queue emails' : confirmation?.action === 'resend' ? 'Resend ticket' : confirmation?.action === 'reissue' ? 'Reissue ticket' : 'Revoke ticket'}</button></div></Dialog>
   </>;
 }
 

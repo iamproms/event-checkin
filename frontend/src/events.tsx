@@ -5,6 +5,7 @@ import { getJson, ManagementApiError, mutateJson } from './management-api';
 import { eventLocal, eventUtc } from './event-time';
 import { describeEvent, type EventState } from './event-vocabulary';
 import { TenantBrandMark } from './tenant-brand';
+import { safeErrorMessage } from './safe-error';
 import './event-management.css';
 
 type FormField = { key: string; label: string; type: 'text' | 'textarea' | 'select' | 'checkbox'; required: boolean; options?: string[] };
@@ -27,7 +28,7 @@ const emptySchedule: EventDraft = { name: '', location: '', description: '', reg
 function message(cause: unknown): string {
   if (cause instanceof ManagementApiError && cause.status === 409) return 'This event changed. Refresh it before trying again.';
   if (cause instanceof ManagementApiError && [401, 403].includes(cause.status)) return 'Your session or permission no longer allows this action. Sign in again if needed.';
-  return cause instanceof Error ? cause.message : 'The request could not be completed.';
+  return safeErrorMessage(cause, 'The request could not be completed.');
 }
 function displayTime(instant: string | null, zone: string): string {
   return instant ? new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone })
@@ -68,7 +69,12 @@ function App() {
     }
   }
   useEffect(() => { void getJson<{ events: EventRecord[] }>('/api/v1/events')
-    .then((result) => setEvents(result.events)).catch((cause) => setError(message(cause)))
+    .then((result) => {
+      setEvents(result.events);
+      const requestedId = new URLSearchParams(location.search).get('event');
+      const requested = result.events.find((event) => event.id === requestedId);
+      if (requested) choose(requested);
+    }).catch((cause) => setError(message(cause)))
     .finally(() => setLoading(false)); }, []);
   useEffect(() => {
     if (!selected || panel !== 'readiness') return;
@@ -83,6 +89,7 @@ function App() {
       registration_closes_at: local(event.registration_closes_at), checkin_opens_at: local(event.checkin_opens_at),
       checkin_closes_at: local(event.checkin_closes_at) });
     setFields(event.form_schema.fields); setPanel('overview'); setCreateMode(false); setError(''); setNotice('');
+    history.replaceState(history.state, '', `${location.pathname}?event=${encodeURIComponent(event.id)}`);
     void Promise.all([
       getJson<{ gates: Gate[] }>(`/api/v1/events/${event.id}/gates`),
       getJson<{ instructions: string[] }>(`/api/v1/events/${event.id}/readiness`),
@@ -183,6 +190,7 @@ function App() {
     {notice && <Status tone="success" title="Updated" instruction={notice} announce="polite" />}
     {selected || createMode ? <div className="event-back"><Button variant="tertiary" onClick={() => {
       setSelected(null); setCreateMode(false); setPanel('overview'); setNotice(''); setError('');
+      history.replaceState(history.state, '', location.pathname);
     }}>← All events</Button></div> : null}
     {!selected && !createMode && <section aria-label="Event overview">
       <div className="event-section-head"><div><h2>Your events</h2><p className="muted">Configure dates, registration and gates before publishing.</p></div>
