@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './icons';
 import type { Capability } from './capabilities';
+import { ScreenState, Skeleton } from '../ui';
 
 export function CapabilityTag({ capability }: { capability: Capability }) {
   return <span className={`capability capability--${capability.mode}`}><span aria-hidden="true" />{capability.label}</span>;
@@ -13,8 +14,12 @@ export function CapabilityNotice({ capability, children }: { capability: Capabil
   </aside>;
 }
 
-export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description: string; actions?: ReactNode }) {
-  return <header className="page-header"><div>{eyebrow && <p className="context-label">{eyebrow}</p>}<h1>{title}</h1><p>{description}</p></div>{actions && <div className="page-actions">{actions}</div>}</header>;
+export function Breadcrumbs({ items }: { items: { label: string; href?: string }[] }) {
+  return <nav className="breadcrumbs" aria-label="Breadcrumb"><ol>{items.map((item, index) => <li key={`${item.label}-${index}`}>{item.href ? <a href={item.href}>{item.label}</a> : <span aria-current="page">{item.label}</span>}</li>)}</ol></nav>;
+}
+
+export function PageHeader({ eyebrow, title, description, actions, breadcrumbs }: { eyebrow?: string; title: string; description: string; actions?: ReactNode; breadcrumbs?: { label: string; href?: string }[] }) {
+  return <header className="page-header"><div>{breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} /> : eyebrow && <p className="context-label">{eyebrow}</p>}<h1>{title}</h1><p>{description}</p></div>{actions && <div className="page-actions">{actions}</div>}</header>;
 }
 
 export function ButtonLink({ href, children, secondary = false }: { href: string; children: ReactNode; secondary?: boolean }) {
@@ -36,8 +41,8 @@ export function TrendChart({ label, values, secondary }: { label: string; values
   return <div className="chart" role="img" aria-label={label}><svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none"><path className="chart-grid" d="M0 32h640M0 84h640M0 136h640M0 188h640" />{secondary && <polyline className="chart-line chart-line--secondary" points={points(secondary)} />}<polyline className="chart-line" points={points(values)} /></svg><div className="chart-axis"><span>08 Oct</span><span>14 Oct</span><span>20 Oct</span><span>26 Oct</span></div></div>;
 }
 
-export function DataTable({ columns, rows, label }: { columns: string[]; rows: ReactNode[][]; label: string }) {
-  return <div className="table-wrap"><table><caption className="sr-only">{label}</caption><thead><tr>{columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex} data-label={columns[columnIndex]}>{cell}</td>)}</tr>)}</tbody></table></div>;
+export function DataTable({ columns, rows, label, loading = false, emptyMessage = 'No records are available yet.' }: { columns: string[]; rows: ReactNode[][]; label: string; loading?: boolean; emptyMessage?: string }) {
+  return <div className="table-wrap"><table><caption className="sr-only">{label}</caption><thead><tr>{columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead><tbody>{loading ? <tr className="table-loading"><td colSpan={columns.length}><Skeleton lines={3} label={`Loading ${label.toLowerCase()}`} /></td></tr> : rows.length ? rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex} data-label={columns[columnIndex]} data-numeric={typeof cell === 'number' || undefined}>{cell}</td>)}</tr>) : <tr className="table-empty"><td colSpan={columns.length}>{emptyMessage}</td></tr>}</tbody></table></div>;
 }
 
 export function StatusMark({ tone, children }: { tone: 'success' | 'warning' | 'danger' | 'neutral' | 'info'; children: ReactNode }) {
@@ -46,6 +51,18 @@ export function StatusMark({ tone, children }: { tone: 'success' | 'warning' | '
 
 export function EmptyState({ icon, title, description, action }: { icon: IconName; title: string; description: string; action?: ReactNode }) {
   return <div className="empty-state"><Icon name={icon} /><h2>{title}</h2><p>{description}</p>{action}</div>;
+}
+
+export function ErrorState({ title = 'Content unavailable', description, onRetry }: { title?: string; description: string; onRetry?: () => void }) {
+  return <ScreenState tone="error" title={title} description={description} action={onRetry && <button className="product-button product-button--secondary" onClick={onRetry}>Try again</button>} />;
+}
+
+export function ComingSoonState({ title, description, detail }: { title: string; description: string; detail?: ReactNode }) {
+  return <ScreenState tone="soon" title={title} description={description} detail={detail} />;
+}
+
+export function RestrictedState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+  return <ScreenState tone="restricted" title={title} description={description} action={action} />;
 }
 
 export function FilterBar({ placeholder = 'Search', count, children, value, onChange }: { placeholder?: string; count?: string; children?: ReactNode; value?: string; onChange?: (value: string) => void }) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ThemeControl } from '../ui';
 import { Icon, type IconName } from './icons';
 import { routeHref } from './router';
@@ -12,22 +12,34 @@ type Props = {
   nav: NavItem[];
   children: ReactNode;
   utility?: ReactNode;
+  workspaceDetail?: ReactNode;
 };
 
-export function AppShell({ product, context, route, nav, children, utility }: Props) {
+export function AppShell({ product, context, route, nav, children, utility, workspaceDetail }: Props) {
   const [navOpen, setNavOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => setNavOpen(false), [route]);
+  useEffect(() => {
+    if (!navOpen) return;
+    closeButton.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setNavOpen(false); menuButton.current?.focus(); }
+    };
+    addEventListener('keydown', closeOnEscape);
+    return () => removeEventListener('keydown', closeOnEscape);
+  }, [navOpen]);
   const current = nav.find((item) => item.route === route);
   return <div className="app-frame">
     <a className="skip-link" href="#main-content">Skip to content</a>
     <header className="app-topbar">
-      <button className="icon-button mobile-menu" onClick={() => setNavOpen(true)} aria-label="Open navigation"><Icon name="menu" /></button>
+      <button ref={menuButton} className="icon-button mobile-menu" onClick={() => setNavOpen(true)} aria-label="Open navigation" aria-expanded={navOpen} aria-controls="application-navigation"><Icon name="menu" /></button>
       <a className="wordmark" href={routeHref(nav[0].route)} aria-label={`${product} home`}><span className="wordmark-mark">E</span><span>{product}</span></a>
       <div className="topbar-actions">{utility}<ThemeControl compact /></div>
     </header>
     {navOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setNavOpen(false)} />}
-    <aside className={`app-sidebar${navOpen ? ' is-open' : ''}`} aria-label={`${context} navigation`}>
-      <div className="sidebar-context"><span>{context}</span><button className="icon-button mobile-menu" onClick={() => setNavOpen(false)} aria-label="Close navigation"><Icon name="close" /></button></div>
+    <aside id="application-navigation" className={`app-sidebar${navOpen ? ' is-open' : ''}`} aria-label={`${context} navigation`}>
+      <div className="sidebar-context"><div><span>{context}</span>{workspaceDetail && <div className="sidebar-detail">{workspaceDetail}</div>}</div><button ref={closeButton} className="icon-button mobile-menu" onClick={() => { setNavOpen(false); menuButton.current?.focus(); }} aria-label="Close navigation"><Icon name="close" /></button></div>
       <nav>{nav.map((item) => <a key={item.route} href={routeHref(item.route)} className={item.route === route ? 'is-current' : ''} aria-current={item.route === route ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span>{item.badge && <small>{item.badge}</small>}</a>)}</nav>
       <div className="sidebar-footer"><a href="#help"><Icon name="help" /><span>Help and support</span></a><p>Secure local workspace</p></div>
     </aside>

@@ -11,11 +11,11 @@ const domain = {
 async function checkLayouts(page: Page) {
   for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.getByLabel('Theme preference').selectOption(theme);
+    await page.getByRole('button', { name: `Use ${theme} theme` }).click();
     await page.setViewportSize({ width: 320, height: 740 });
-    await expect(page.getByLabel('Theme preference')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Theme preference' })).toBeVisible();
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
-    await expect(page.getByLabel('Theme preference')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Theme preference' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze();
     expect(results.violations).toEqual([]);
@@ -64,7 +64,7 @@ test('platform sign-in does not expose provisioning before MFA', async ({ page }
     route.fulfill({ json: { state: 'mfa' } }));
   await page.goto('/platform.html');
   await page.getByRole('textbox', { name: 'Verified staff email' }).fill('operator@example.test');
-  await page.getByLabel('Password').fill('fixture-password');
+  await page.getByLabel('Password', { exact: true }).fill('fixture-password');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Verify your identity' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reserve organization' })).toHaveCount(0);

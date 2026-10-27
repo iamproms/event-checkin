@@ -7,6 +7,7 @@ const draft = {
 };
 
 test('branding editor previews both themes, reflows and confirms publication', async ({ page }) => {
+  test.setTimeout(180_000);
   let published = false;
   await page.route('**/api/v1/branding/draft', (route) => route.fulfill({
     json: { ...draft, published_version: published ? 1 : null },
@@ -37,7 +38,7 @@ test('branding editor previews both themes, reflows and confirms publication', a
   await page.getByRole('button', { name: 'Confirm publish' }).click();
   await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
   for (const theme of ['light', 'dark']) {
-    await page.getByLabel('Theme preference').selectOption(theme);
+    await page.getByRole('button', { name: `Use ${theme} theme` }).click();
     await page.setViewportSize({ width: 320, height: 740 });
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);

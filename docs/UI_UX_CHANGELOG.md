@@ -32,12 +32,35 @@ This file records the work completed on `feat/platform-ui-ux-overhaul`. Entries 
 
 - The main worktree has unrelated and uncommitted organization directory, privacy notice, API safety, and import changes from another workstream. No files from that worktree were modified, copied, reset, or discarded. Integration will wait until those changes are committed and can be reviewed safely.
 
-### Pending approval
+### Approved scope
 
-- Phase 2 design foundation.
-- Phase 3 core workflows.
-- Phase 4 supporting interfaces.
-- Phase 5 final verification and documentation.
+- The implementation direction and all remaining phases were approved before visual implementation began.
+
+## 2026-10-27: Phase 2 design foundation
+
+### Implemented
+
+- Added reusable password visibility, select, textarea, skeleton, inline progress, and screen-state primitives.
+- Replaced the native theme select with an accessible System, Light, Dark segmented control that reports the resolved theme.
+- Added button loading indicators, disabled-reason support, numeric table alignment, stable loading rows, and explicit empty table content.
+- Added safe JSON response handling and status-based user messages so raw server responses and parsing errors do not reach product screens.
+- Removed the fictional attendance figure from authentication.
+- Added keyboard focus restoration and Escape handling to the mobile navigation drawer.
+- Added event context to the organizer sidebar.
+- Added `EventWorkspaceProvider` with validated `#route?event=<id>` state that persists across navigation and refresh.
+- Added reusable breadcrumbs and shared error, Coming soon, and restricted-state adapters.
+- Expanded the UI laboratory with password and screen-state specimens.
+
+### Tests added or updated
+
+- Added keyboard coverage for showing and hiding a password while preserving its value.
+- Added organizer event-selection persistence coverage across routes and refresh.
+- Updated theme tests for the segmented control.
+- Expanded narrow-screen diagnostics to identify intrinsic-width overflow.
+
+### Visual inspection
+
+- Inspected refreshed organizer desktop light, platform desktop dark, and gate mobile dark screenshots after the foundation changes.
 
 ## Backend dependencies
 

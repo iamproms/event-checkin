@@ -4,6 +4,7 @@ import { AppShell, type NavItem } from './product/AppShell';
 import { capabilities } from './product/capabilities';
 import { ButtonLink, CapabilityNotice, DataTable, EmptyState, PageHeader, SectionHeader, SettingRow, StatusMark } from './product/components';
 import { useHashRoute } from './product/router';
+import { EventWorkspaceProvider, useEventWorkspace } from './product/EventWorkspaceContext';
 import { getJson, mutateJson } from './management-api';
 import { AttendanceDashboard, EventPicker, GateStaffWorkspace, LiveEventsDirectory, ParticipantsWorkspace, useEvents } from './features/event-critical';
 import './product/product.css';
@@ -27,9 +28,7 @@ type TicketState = { ticket_status: string; delivery_status: string; delivery_er
 type BulkTicketState = { registered: number; issued: number; queued: number; sent: number; delivered: number; failed: number };
 function Tickets() {
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
-  const { events } = useEvents();
-  const [bulkEventId, setBulkEventId] = useState(params.get('event') || '');
-  const activeBulkEvent = bulkEventId || events.find(item => item.status === 'published')?.id || events[0]?.id || '';
+  const { events, selectedEventId: activeBulkEvent, setSelectedEventId } = useEvents();
   const bulkEvent = events.find(item => item.id === activeBulkEvent);
   const [bulkState, setBulkState] = useState<BulkTicketState | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -43,6 +42,7 @@ function Tickets() {
   async function command(action: 'resend'|'reissue'|'revoke') { setBusy(true); setError(''); try { setTicket(await mutateJson<TicketState>(`${path}/${action}`, {})); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Ticket action failed.'); } finally { setBusy(false); } }
   async function refreshBulk() { if (!activeBulkEvent) return; setBulkBusy(true); setBulkError(''); try { setBulkState(await getJson<BulkTicketState>(`/api/v1/events/${encodeURIComponent(activeBulkEvent)}/tickets/bulk`)); } catch (cause) { setBulkError(cause instanceof Error ? cause.message : 'Ticket totals could not be loaded.'); } finally { setBulkBusy(false); } }
   useEffect(() => { setBulkState(null); if (activeBulkEvent) void refreshBulk(); }, [activeBulkEvent]);
+  useEffect(() => { if (activeBulkEvent) setEventId(activeBulkEvent); }, [activeBulkEvent]);
   async function bulkCommand(action: 'issue' | 'send') {
     if (!activeBulkEvent) return;
     const text = action === 'issue' ? 'Queue secure QR issuance for eligible imported registrations?' : 'Queue transactional ticket email for all issued imported tickets without a prior send? Confirm the approved notice, sender, and test transport before continuing.';
@@ -52,9 +52,9 @@ function Tickets() {
     catch (cause) { setBulkError(cause instanceof Error ? cause.message : 'The bulk action failed.'); }
     finally { setBulkBusy(false); }
   }
-  return <><PageHeader eyebrow="Innovation Summit 2026" title="Tickets" description="Inspect delivery state and use credential-safe support actions." /><CapabilityNotice capability={capabilities.tickets}>Ticket commands are live only when an authorized operator supplies an existing event and registration ID. Credentials are never returned here.</CapabilityNotice>
+  return <><PageHeader eyebrow={bulkEvent?.name || 'Event operations'} title="Tickets" description="Inspect delivery state and use credential-safe support actions." /><CapabilityNotice capability={capabilities.tickets}>Ticket commands are live only when an authorized operator supplies an existing event and registration ID. Credentials are never returned here.</CapabilityNotice>
     <section className="panel-section"><SectionHeader title="Imported attendee tickets" description="Issue first, review the message, then queue email separately." />
-      <div className="toolbar-row"><EventPicker events={events} value={activeBulkEvent} onChange={setBulkEventId}/><button className="product-button product-button--secondary" disabled={bulkBusy || !activeBulkEvent} onClick={() => void refreshBulk()}>{bulkBusy ? 'Refreshing…' : 'Refresh progress'}</button></div>
+      <div className="toolbar-row"><EventPicker events={events} value={activeBulkEvent} onChange={setSelectedEventId}/><button className="product-button product-button--secondary" disabled={bulkBusy || !activeBulkEvent} onClick={() => void refreshBulk()}>{bulkBusy ? 'Refreshing…' : 'Refresh progress'}</button></div>
       {bulkState && <DataTable label="Imported ticket progress" columns={['Registrations','Issued','Queued','Provider accepted','Delivered signal','Failed']} rows={[[bulkState.registered,bulkState.issued,bulkState.queued,bulkState.sent,bulkState.delivered,bulkState.failed]]} />}
       <div className="page-actions"><button className="product-button" disabled={bulkBusy || !activeBulkEvent || bulkEvent?.status !== 'published'} onClick={() => void bulkCommand('issue')}>Issue QR tickets</button><button className="product-button product-button--secondary" disabled={!activeBulkEvent} onClick={() => setShowEmailPreview(value => !value)}>{showEmailPreview ? 'Hide email preview' : 'Preview ticket email'}</button><button className="product-button" disabled={bulkBusy || !activeBulkEvent || !bulkState?.issued} onClick={() => void bulkCommand('send')}>Queue ticket emails</button></div>
       {showEmailPreview && <div className="ticket-email-preview"><p><strong>Preview only · no recipient or credential</strong></p><h3>Your ticket for {bulkEvent?.name || 'the event'}</h3><p>{bulkEvent?.starts_at ? new Date(bulkEvent.starts_at).toLocaleString() : 'Event date'} · {bulkEvent?.location || 'Venue to be confirmed'}</p><p>Present your unique QR code at the gate. Keep it private; the first valid scan uses it.</p><p>For ticket help, contact the event organizer.</p><p>The delivery worker inserts each attendee’s unique QR image. This preview does not send email.</p></div>}
@@ -98,6 +98,12 @@ function Settings() {
 const screens: Record<string, () => ReactNode> = { dashboard: Dashboard, events: Events, participants: Attendees, tickets: Tickets, 'check-in': CheckIn, 'gate-staff': Team, communications: Communications, reports: Reports, branding: Branding, billing: Billing, settings: Settings };
 
 type Session = { email: string; role: string; tenant_id: string };
+function OrganizerShell({ session, route, Screen, signOut }: { session: Session; route: string; Screen: () => ReactNode; signOut: () => Promise<void> }) {
+  const { selectedEvent, loading } = useEventWorkspace();
+  const detail = loading ? 'Loading events' : selectedEvent ? <><strong>{selectedEvent.name}</strong><span>{selectedEvent.status}</span></> : 'No events yet';
+  return <AppShell product="Event Check-in" context={session.email} workspaceDetail={detail} route={screens[route] ? route : 'dashboard'} nav={nav} utility={<button className="product-button product-button--secondary" onClick={() => void signOut()}>Sign out</button>}><Screen /></AppShell>;
+}
+
 function Workspace() {
   const route = useHashRoute('dashboard'); const Screen = screens[route] || Dashboard;
   const [session, setSession] = useState<Session | null>(null);
@@ -109,7 +115,7 @@ function Workspace() {
   async function signOut() { await mutateJson('/api/v1/auth/logout', {}); location.href = '/'; }
   if (state === 'loading') return <main className="session-gate" role="status">Checking organizer session…</main>;
   if (state === 'denied') return <main className="session-gate"><h1>Organizer access required</h1><p>Sign in with an authorized organizer account. Gate staff use the assigned scanner workspace.</p><a className="product-button" href={session?.role?.startsWith('gate_') ? '/gate.html' : '/'}>{session?.role?.startsWith('gate_') ? 'Open scanner' : 'Sign in'}</a></main>;
-  return <AppShell product="Event Check-in" context={session?.email || 'Organizer'} route={screens[route] ? route : 'dashboard'} nav={nav} utility={<button className="product-button product-button--secondary" onClick={() => void signOut()}>Sign out</button>}><Screen /></AppShell>;
+  return <EventWorkspaceProvider><OrganizerShell session={session!} route={route} Screen={Screen} signOut={signOut} /></EventWorkspaceProvider>;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Workspace /></StrictMode>);

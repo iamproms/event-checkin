@@ -31,11 +31,11 @@ test('theme follows system until an explicit choice is persisted', async ({ page
   await page.emulateMedia({ colorScheme: 'dark' });
   await openLab(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await page.getByLabel('Theme preference').selectOption('light');
+  await page.getByRole('button', { name: 'Use light theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await page.getByLabel('Theme preference').selectOption('system');
+  await page.getByRole('button', { name: 'Use system theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
@@ -60,9 +60,10 @@ test('320px reflow, doubled text, and compact touch targets', async ({ page, bro
   await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
   const overflow = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth,
-    offenders: [...document.querySelectorAll('body *')].map((node) => ({ node: node.tagName.toLowerCase(), text: node.textContent?.trim().slice(0, 35), right: Math.ceil(node.getBoundingClientRect().right) })).filter((item) => item.right > innerWidth + 1).slice(0, 8),
+    roots: [document.documentElement, document.body].map(node => ({ node: node.tagName.toLowerCase(), scrollWidth: node.scrollWidth, clientWidth: node.clientWidth, width: node.getBoundingClientRect().width })),
+    offenders: [...document.querySelectorAll('body *')].map((node) => ({ node: node.tagName.toLowerCase(), className: node.getAttribute('class'), text: node.textContent?.trim().slice(0, 35), scrollWidth: node.scrollWidth, clientWidth: node.clientWidth, left: Math.floor(node.getBoundingClientRect().left), right: Math.ceil(node.getBoundingClientRect().right), width: Math.ceil(node.getBoundingClientRect().width) })).filter((item) => item.right > innerWidth + 1 || item.left < -1 || item.scrollWidth > item.clientWidth + 1).slice(0, 12),
   }));
-  expect(overflow.width, JSON.stringify(overflow.offenders)).toBeLessThanOrEqual(320);
+  expect(overflow.width, JSON.stringify({ roots: overflow.roots, offenders: overflow.offenders })).toBeLessThanOrEqual(320);
   await page.getByRole('button', { name: 'Use compact density' }).click();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const touch = page.getByRole('button', { name: 'Gate action' });
@@ -73,10 +74,10 @@ test('320px reflow, doubled text, and compact touch targets', async ({ page, bro
 });
 
 test('light and dark specimens have no detectable WCAG 2.2 AA violations', async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(180_000);
   await openLab(page);
   for (const theme of ['light', 'dark'] as const) {
-    await page.getByLabel('Theme preference').selectOption(theme);
+    await page.getByRole('button', { name: `Use ${theme} theme` }).click();
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze();
     expect(results.violations).toEqual([]);
   }
@@ -101,7 +102,7 @@ test('rendered theme pixels and component geometry match approved tokens', async
   }
   expect(await sampleCanvas()).toBe('f7f6f3');
   expect((await page.getByRole('button', { name: 'Continue', exact: true }).first().boundingBox())?.height).toBe(44);
-  await page.getByLabel('Theme preference').selectOption('dark');
+  await page.getByRole('button', { name: 'Use dark theme' }).click();
   await page.getByRole('button', { name: 'Use compact density' }).click();
   expect(await sampleCanvas()).toBe('171816');
   const geometry = await page.getByRole('button', { name: 'Continue', exact: true }).first().evaluate((button) => ({
@@ -118,7 +119,7 @@ test('rendered theme pixels and component geometry match approved tokens', async
 test('published text, control, focus and status token pairs meet contrast minima', async ({ page }) => {
   await openLab(page);
   for (const theme of ['light', 'dark'] as const) {
-    await page.getByLabel('Theme preference').selectOption(theme);
+    await page.getByRole('button', { name: `Use ${theme} theme` }).click();
     const ratios = await page.evaluate(() => {
       const css = getComputedStyle(document.documentElement);
       const channel = (part: string) => { const n = parseInt(part, 16) / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; };

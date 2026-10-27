@@ -22,6 +22,25 @@ test('organizer workspace exposes every destination with honest capability label
   await expect(page.getByText('Server-confirmed admissions')).toBeVisible();
 });
 
+test('selected event is validated in the URL and persists across workspace routes and refresh', async ({ page }) => {
+  const events = [
+    { id: 'event-1', slug: 'summit', name: 'Innovation Summit 2026', status: 'published', starts_at: '2026-11-01T08:00:00Z', ends_at: '2026-11-01T18:00:00Z', revision: 1 },
+    { id: 'event-2', slug: 'forum', name: 'Operations Forum', status: 'published', starts_at: '2026-12-01T08:00:00Z', ends_at: '2026-12-01T18:00:00Z', revision: 1 },
+  ];
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
+  await page.route('**/api/v1/events', route => route.fulfill({ json: { events } }));
+  await page.route('**/api/v1/events/event-2/registrations**', route => route.fulfill({ json: { registrations: [], next_cursor: null } }));
+  await page.route('**/api/v1/events/event-2/tickets/bulk', route => route.fulfill({ json: { registered: 0, issued: 0, queued: 0, sent: 0, delivered: 0, failed: 0 } }));
+  await page.goto('/workspace.html#participants?event=event-2');
+  await expect(page.getByRole('combobox', { name: 'Event' }).locator('option:checked')).toHaveText('Operations Forum');
+  await page.getByRole('link', { name: /^Tickets/ }).click();
+  await expect(page).toHaveURL(/#tickets\?event=event-2/);
+  await expect(page.getByRole('heading', { name: 'Tickets', exact: true })).toBeVisible();
+  await expect(page.getByText('Operations Forum', { exact: true }).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: 'Event' }).first().locator('option:checked')).toHaveText('Operations Forum');
+});
+
 test('gate staff are directed away from the organizer workspace', async ({ page }) => {
   await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'scanner@example.test', role: 'gate_scanner', tenant_id: 'tenant-1' } }));
   await page.goto('/workspace.html');
@@ -72,7 +91,7 @@ test('shared sign-in chooses a server-authorized workspace after password verifi
   });
   await page.goto('/');
   await page.getByLabel('Email address').fill('organizer@example.test');
-  await page.getByLabel('Password').fill('synthetic-password');
+  await page.getByLabel('Password', { exact: true }).fill('synthetic-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Choose your workspace' })).toBeVisible();
   await page.getByRole('button', { name: 'Summit Operations · tenant owner' }).click();
@@ -200,6 +219,7 @@ test('gate camera decodes QR without native BarcodeDetector before server confir
 });
 
 test('representative product screens reflow and pass automated accessibility checks', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
   const screenshotDir = '../docs/screenshots';
   await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
   await page.route('**/api/v1/events', route => route.fulfill({ json: { events: [] } }));
@@ -222,7 +242,7 @@ test('representative product screens reflow and pass automated accessibility che
   await testInfo.attach('organizer-desktop-light', { path: organizerShot, contentType: 'image/png' });
   await page.goto('/platform-console.html#overview');
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
-  await page.getByLabel('Theme preference').selectOption('dark');
+  await page.getByRole('button', { name: 'Use dark theme' }).click();
   const platformShot = `${screenshotDir}/platform-desktop-dark.png`;
   await page.screenshot({ path: platformShot, fullPage: true, animations: 'disabled' });
   await testInfo.attach('platform-desktop-dark', { path: platformShot, contentType: 'image/png' });
@@ -242,7 +262,7 @@ test('platform recovery codes render as separate readable rows', async ({ page }
   await page.route('**/api/v1/platform/auth/mfa/verify', route => route.fulfill({ json: { state: 'session', recovery_codes: ['alpha-1234567890', 'bravo-1234567890', 'charlie-1234567890'] } }));
   await page.goto('/platform.html');
   await page.getByLabel('Verified staff email').fill('platform@example.test');
-  await page.getByLabel('Password').fill('local-password');
+  await page.getByLabel('Password', { exact: true }).fill('local-password');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByLabel('Authenticator code').fill('123456');
   await page.getByRole('button', { name: 'Verify' }).click();

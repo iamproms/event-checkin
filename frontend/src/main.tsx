@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./product/auth.css";
-import { Button, Field, Status } from "./ui";
+import { Button, Field, PasswordField, Status } from "./ui";
 import { AuthShell } from './product/AuthShell';
 
 type State = "login" | "select_context" | "mfa" | "enroll" | "invite" | "reset" | "recover" | "session";
@@ -10,15 +10,27 @@ type Result = { state?: State; secret?: string; recovery_codes?: string[]; messa
 
 async function request(path: string, body: object, area: 'auth' | 'shared' | 'platform/auth' = 'auth'): Promise<Result> {
   const csrf = await fetch("/api/v1/auth/csrf", { credentials: "same-origin" });
-  if (!csrf.ok) throw new Error("Request verification failed");
-  const { csrf_token } = await csrf.json() as { csrf_token: string };
+  if (!csrf.ok) throw new Error("The secure request could not be started. Refresh and try again.");
+  let csrfToken = '';
+  try { csrfToken = ((await csrf.json()) as { csrf_token?: string }).csrf_token || ''; }
+  catch { throw new Error("The secure request could not be started. Refresh and try again."); }
+  if (!csrfToken) throw new Error("The secure request could not be started. Refresh and try again.");
   const response = await fetch(`/api/v1/${area}/${path}`, {
     method: "POST", credentials: "same-origin",
-    headers: { "content-type": "application/json", "x-csrf-token": csrf_token },
+    headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
     body: JSON.stringify(body),
   });
-  const result = await response.json() as Result & { detail?: { message?: string } };
-  if (!response.ok) throw new Error(result.detail?.message || "Request failed");
+  let result: Result & { detail?: { message?: string } } = {};
+  try { result = await response.json() as Result & { detail?: { message?: string } }; }
+  catch { if (response.ok) throw new Error('The service returned an unreadable response. Try again.'); }
+  if (!response.ok) {
+    const serverMessage = result.detail?.message || '';
+    if (response.status === 429 || /too many|locked|rate limit/i.test(serverMessage)) throw new Error('Too many attempts were made. Wait a moment, then try again or reset your password.');
+    if (response.status === 401) throw new Error('The credentials or verification code were not accepted. Check them and try again.');
+    if (response.status === 403) throw new Error('This account does not have access to the requested workspace.');
+    if (response.status >= 500) throw new Error('The sign-in service is temporarily unavailable. Try again shortly.');
+    throw new Error('The request could not be completed. Review the information and try again.');
+  }
   return result;
 }
 
@@ -162,7 +174,7 @@ function App() {
   };
 
   return <AuthShell area="Organizer access" title={titles[state]} description={descriptions[state]}><section aria-labelledby="auth-title">
-    {error && <Status tone="danger" title="Could not continue" instruction={error} announce="assertive" />}
+    {error && <Status tone="danger" title={error.startsWith('Too many attempts') ? 'Sign-in temporarily limited' : 'Could not continue'} instruction={error} announce="assertive" />}
     {message && <Status tone="info" title="Update" instruction={message} announce="polite" />}
     {state === "session" ? <div className="stack">
       {codes.length > 0 && <div><h2>Save recovery codes</h2><p>Each code works once. Store them safely.</p><pre className="recovery-codes">{codes.join("\n")}</pre></div>}
@@ -172,7 +184,7 @@ function App() {
     </div> : <form onSubmit={submit} className="stack">
       {state === 'select_context' && <div className="stack" role="group" aria-label="Available workspaces">{contexts.map(context => <Button key={context.id} variant="secondary" loading={busy} onClick={() => void chooseContext(context.id)}>{context.name} · {context.role.replaceAll('_',' ')}</Button>)}</div>}
       {(state === "login" || state === "recover") && <Field label="Email address" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />}
-      {(state === "login" || state === "invite" || state === "reset") && <Field label="Password" type="password" autoComplete={state === "login" ? "current-password" : "new-password"} required minLength={state === "login" ? undefined : 12} maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} />}
+      {(state === "login" || state === "invite" || state === "reset") && <PasswordField label="Password" autoComplete={state === "login" ? "current-password" : "new-password"} required minLength={state === "login" ? undefined : 12} maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} />}
       {state === "enroll" && <><Button variant="secondary" onClick={enroll} loading={busy} loadingText="Generating setup key…">Generate setup key</Button>{secret && <p className="key">Setup key: <code>{secret}</code></p>}</>}
       {(state === "mfa" || state === "enroll") && <><Field label={recovery ? "Recovery code" : "Six-digit code"} inputMode={recovery ? "text" : "numeric"} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />{state === "mfa" && <Button variant="tertiary" onClick={() => setRecovery(!recovery)}>{recovery ? "Use authenticator code" : "Use a recovery code"}</Button>}</>}
       {state !== 'select_context' && <Button type="submit" loading={busy} loadingText="Working…" disabled={state === "enroll" && !secret}>{state === "login" ? "Sign in" : state === "recover" ? "Send reset link" : state === "invite" ? "Accept invitation" : state === "reset" ? "Update password" : "Verify code"}</Button>}

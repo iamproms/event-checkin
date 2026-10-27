@@ -6,7 +6,7 @@ export function AuthShell({ area, title, description, children }: { area: string
     <section className="auth-scene" aria-label="Event operations preview">
       <div className="auth-scene-brand"><span className="auth-mark" aria-hidden="true">E</span><span>Event Check-in</span></div>
       <div className="venue-lines" aria-hidden="true"><span/><span/><span/><span/><span/></div>
-      <div className="auth-scene-copy"><p>From registration to the gate</p><h2>One calm place to run every arrival.</h2><div className="arrival-strip"><span>Registration open</span><strong>1,284 expected</strong><span>12 Nov · Lagos</span></div></div>
+      <div className="auth-scene-copy"><p>From registration to the gate</p><h2>One calm place to run every arrival.</h2><div className="arrival-strip" aria-label="Platform capabilities"><span>Registration</span><span>Ticket delivery</span><span>Server-confirmed entry</span></div></div>
     </section>
     <section className="auth-workspace">
       <div className="auth-utility"><span>{area}</span><ThemeControl compact /></div>

@@ -46,7 +46,7 @@ test('event configuration is readable, accessible and reflows at 320px and 200% 
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Publish event' })).toBeFocused();
   for (const theme of ['light', 'dark']) {
-    await page.getByLabel('Theme preference').selectOption(theme);
+    await page.getByRole('button', { name: `Use ${theme} theme` }).click();
     await page.setViewportSize({ width: 320, height: 740 });
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     for (const panel of ['Readiness', 'Gates', 'Form', 'Settings']) {

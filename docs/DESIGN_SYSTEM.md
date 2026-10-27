@@ -1,7 +1,7 @@
 # Event Check-in Platform — Design System
 
-**Status:** G-07 Quiet Precision foundation approved 2026-10-23; feature-level compositions and tenant brand bounds remain open.
-**Working direction:** Quiet Precision.  
+**Status:** G-07 Quiet Precision foundation approved 2026-10-23; Quiet Operations application foundation implemented on `feat/platform-ui-ux-overhaul` beginning 2026-10-27.
+**Working direction:** Quiet Precision foundations with the Quiet Operations framed application composition.
 **Inputs:** PRD v1.0; [PRD review](PRD_REVIEW.md) and approved decisions D-01–D-13; [technical design](TECHNICAL_DESIGN.md); supplied wireframes; Taste Skill app guidance; Emil Kowalski design engineering guidance.  
 **Visual companion:** [design foundations laboratory](design-system-preview.html). This iteration contains isolated specimens only; no application layouts or finished brand are proposed.
 
@@ -105,14 +105,17 @@ Complete spacing scale: `space.1=4`, `.2=8`, `.3=12`, `.4=16`, `.6=24`, `.8=32`,
 | Secondary action | Surface fill with control border | Is it distinct from a plain field? |
 | Tertiary action | Text action with clear underline or equivalent affordance | Is it discoverable without competing with primary? |
 | Destructive action | Independent danger fill and explicit verb/object | Is destructive intent clear in both themes? |
-| Input | Persistent label, clear border, hint/error below | Are border, focus, and error visible in both themes? |
+| Input | Persistent label, clear border, hint/error below; password fields include a keyboard-accessible visibility control | Are border, focus, error, and password state visible in both themes? |
+| Theme preference | Three-state System, Light, Dark segmented control with an explicit selected state | Is the preference clear at a glance and usable at 200% zoom? |
 | Navigation item | Text plus neutral selected background or slim border | Is selection clear without a colored pill or badge? |
 | Status | Tinted semantic surface, explicit heading and short instruction | Does status remain legible without relying on hue? |
+| Screen state | Shared empty, error, restricted, and Coming soon composition | Does the state explain what happened and the next available action? |
+| Data table | Captioned, stable columns, numeric alignment, loading rows, and explicit empty content | Can dense records be scanned and understood on narrow screens? |
 | Grouped content | One rule or one surface step | Does hierarchy hold without nested cards? |
 
 The laboratory uses the same labels, copy, and specimen order for every candidate combination. Switching controls changes only the selected foundation tokens, which helps isolate the design decision.
 
-**State contract:** default, fine-pointer hover, pointer press, keyboard focus, disabled, loading, selected and validation error are shown as isolated specimens. Focus is a 2px outline with 3px offset. Press uses only a subtle transform and only on fine-pointer interaction; keyboard selection stays immediate. Loading retains the action label's meaning and focus, uses `aria-busy`/`aria-disabled`, blocks duplicate submission in the eventual application handler, and is expressed in text without an indeterminate decorative animation. Disabled controls need a reason nearby in real workflows. Validation errors use a field border, `aria-invalid`, associated text, and a recovery instruction. Selected navigation is indicated by neutral fill and weight, with `aria-current`; accent-rule remains a comparison option.
+**State contract:** default, fine-pointer hover, pointer press, keyboard focus, disabled, loading, selected and validation error are shown as isolated specimens. Focus is a 2px outline with 3px offset. Press uses only a subtle transform and only on fine-pointer interaction; keyboard selection stays immediate. Loading retains the action label's meaning and focus, uses `aria-busy`/`aria-disabled`, blocks duplicate submission in the handler, and may pair text with a compact inline spinner. Reduced motion replaces rotation with a static progress cue. Disabled controls need a reason nearby in real workflows. Validation errors use a field border, `aria-invalid`, associated text, and a recovery instruction. Selected navigation is indicated by neutral fill and weight, with `aria-current`.
 
 ### Icons, elevation and motion
 
@@ -128,6 +131,10 @@ Base and grouped surfaces have **no shadow**. A floating menu/popover may use `0
 | `motion.overlay.exit` | 140–180ms, opacity and transform | Shorter exit; interruption must remain possible. |
 
 The preview implements only pointer press feedback; overlay tokens are documentation, not animation added to the sheet. `prefers-reduced-motion` removes press scale and future spatial translation. No `transition: all`, shimmer, bounce, stagger, scanner celebration, or motion required to understand a state. This follows Emil's frequency, purpose, performance and reduced-motion guidance.
+
+### Workspace context contract
+
+Organizer event context is represented by a validated `event` parameter in the hash URL. The shared provider loads accessible events once, validates the requested identifier, selects an appropriate published event only when the URL is absent or invalid, and preserves the validated identifier across workspace navigation. Screens display the selected event name and lifecycle before technical identifiers. Technical identifiers remain available in support details and API requests.
 
 ## 3. Functional interaction contracts retained from the prior design review
 
@@ -153,7 +160,7 @@ Emil's interaction guidance applies by task frequency: frequent scanner and keyb
 
 **Review criteria:** compare the same specimen content at 100% and 200% zoom; try keyboard controls and both themes; inspect long names, numbers, error text, and status distinction; compare accents in light and dark with both neutral foundations. The HTML has only isolated specimens. Its controls are a review aid, not a runtime design-system implementation.
 
-**Evidence and limits:** local font files are bundled with [Inter](assets/fonts/INTER-OFL.txt) and [Geist](assets/fonts/GEIST-OFL.txt) license copies and identified by font metadata. The preview checks browser font-load status at runtime. Contrast calculations were corrected to parse hex tokens. Calculated ratios across the tested light/dark palette include primary text/canvas 14.67–16.58:1, secondary text/surface 6.38–9.63:1, action text/fill 7.06–11.59:1, revised semantic text/surface 6.23–10.22:1, destructive text/fill 8.56–13.78:1, and control boundary/surface 3.95–5.60:1. Hairline separators are quieter and cannot carry essential meaning. Static inspection found local assets, unique IDs, associated form labels, balanced CSS braces, and valid embedded JavaScript. A DOM interaction check switched all **96** font/neutral/theme/accent/density/radius combinations; each selector retained its `aria-pressed` state and every contrast readout remained numeric. This DOM check does not render pixels or load fonts. The current sandbox exposes no browser tab and blocks headless Chrome, Firefox and Playwright Chromium, so no screenshot or actual browser font-rendering claim is possible from this run. Final typography fit, anti-aliasing, 320px and 200% zoom reflow, focus appearance, keyboard operation, and assistive-technology behavior require rendered browser/device review. Every tenant-selected palette must be validated before publication. This historical laboratory evidence does not replace rendered M1-05 production validation.
+**Evidence and limits:** local font files are bundled with [Inter](assets/fonts/INTER-OFL.txt) and [Geist](assets/fonts/GEIST-OFL.txt) license copies and identified by font metadata. The preview checks browser font-load status at runtime. Contrast calculations were corrected to parse hex tokens. Calculated ratios across the tested light/dark palette include primary text/canvas 14.67–16.58:1, secondary text/surface 6.38–9.63:1, action text/fill 7.06–11.59:1, revised semantic text/surface 6.23–10.22:1, destructive text/fill 8.56–13.78:1, and control boundary/surface 3.95–5.60:1. Hairline separators are quieter and cannot carry essential meaning. Static inspection found local assets, unique IDs, associated form labels, balanced CSS braces, and valid embedded JavaScript. A DOM interaction check switched all **96** font/neutral/theme/accent/density/radius combinations; each selector retained its `aria-pressed` state and every contrast readout remained numeric. The preview and representative product pages were rendered with headless Chromium on 2026-10-27. Automated browser checks cover 320px reflow, 200% root text, keyboard focus, theme switching, and axe rules; manual assistive-technology and physical venue-device reviews remain release-readiness work. Every tenant-selected palette must be validated before publication.
 
 **M1-05 implementation evidence:** The Fedora Chromium suite passed 10/10 isolated-component and migrated-auth browser tests, including actual Inter loading, 320px reflow with doubled root text, both themes, keyboard dialog focus, axe checks, contrast, and selected rendered-pixel/geometry assertions. This does not constitute a manual screen-reader review or an actual browser 200% zoom check; those remain release-readiness checks. The historical laboratory's alternative palettes are outside the approved production combination.
 

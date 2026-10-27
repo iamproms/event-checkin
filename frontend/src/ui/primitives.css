@@ -2,10 +2,16 @@
 .ui-field__input,
 .ui-nav-item { font-family: var(--font-body); }
 
-.theme-select { display: grid; gap: var(--space-1); color: var(--text-muted); font: var(--type-support); }
-.theme-select select { min-height: 36px; padding: 6px 28px 6px 10px; border: 1px solid var(--border-control); border-radius: var(--radius-control); background: var(--surface); color: var(--text); }
-.theme-select--compact select { width: 112px; }
-.theme-select select:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.theme-control { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; color: var(--text-muted); font: var(--type-support); }
+.theme-control:not(.theme-control--compact) { width: min(100%, 18rem); }
+.theme-control__label { color: var(--text); font: var(--type-label); }
+.theme-control__choices { display: inline-grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; min-width: 0; padding: 2px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--surface-quiet); }
+.theme-control__choices button { min-width: 0; min-height: 34px; padding: 5px 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; font: 500 .75rem/1rem var(--font-body); overflow-wrap: anywhere; }
+.theme-control__choices button[aria-pressed='true'] { background: var(--surface-raised); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+.theme-control__resolved { font: var(--type-caption); }
+.theme-control__short-label { display: none; }
+.theme-control--compact .theme-control__choices { width: auto; }
+.theme-control--compact .theme-control__choices button { width: 34px; padding-inline: 0; }
 
 .ui-button {
   min-height: var(--control-height);
@@ -18,12 +24,15 @@
   text-align: center;
   overflow-wrap: anywhere;
 }
+.ui-button-wrap { display: inline-grid; gap: var(--space-1); max-width: 100%; }
+.ui-button .ui-spinner { margin-right: var(--space-2); }
+.ui-control-note { max-width: 28rem; color: var(--text-muted); font: var(--type-caption); overflow-wrap: anywhere; }
 .ui-button--touch { min-width: 44px; min-height: 44px; }
 .ui-button--primary { background: var(--action); color: var(--action-text); border-color: var(--action); }
 .ui-button--secondary { background: var(--surface); color: var(--text); border-color: var(--border-control); }
 .ui-button--tertiary { background: transparent; color: var(--action); text-decoration: underline; text-underline-offset: 3px; }
 .ui-button--destructive { background: var(--danger-action); color: var(--danger-action-text); border-color: var(--danger-action); }
-.ui-button:disabled { cursor: not-allowed; opacity: .58; }
+.ui-button:disabled { cursor: not-allowed; opacity: var(--opacity-disabled); }
 .ui-button[aria-busy='true'] { cursor: progress; }
 @media (hover: hover) and (pointer: fine) {
   .ui-button:not(:disabled):not([aria-disabled='true']) { transition: transform var(--motion-press) var(--ease-out); }
@@ -49,6 +58,10 @@
   color: var(--text);
   font: var(--type-body);
 }
+.ui-field__textarea { min-height: 96px; resize: vertical; }
+.ui-password { position: relative; min-width: 0; }
+.ui-password .ui-field__input { padding-right: 68px; }
+.ui-password__toggle { position: absolute; top: 50%; right: 5px; min-width: 54px; min-height: 34px; padding: 4px 8px; border: 0; border-radius: var(--radius-control); transform: translateY(-50%); background: transparent; color: var(--action); cursor: pointer; font: 600 .75rem/1rem var(--font-body); }
 .ui-field__input[aria-invalid='true'] { border-color: var(--status-danger-text); border-width: 2px; }
 .ui-field__input:disabled { opacity: .58; cursor: not-allowed; }
 .ui-field__hint, .ui-field__error { margin: 0; font: var(--type-support); overflow-wrap: anywhere; }
@@ -73,6 +86,24 @@
 .ui-status--danger { color: var(--status-danger-text); background: var(--status-danger-bg); }
 .ui-status--info { color: var(--status-info-text); background: var(--status-info-bg); }
 .ui-status__title { font-weight: 600; }
+
+.ui-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ui-spin .7s linear infinite; vertical-align: -.125em; }
+.ui-inline-progress { display: inline-flex; align-items: center; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+.ui-skeleton { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
+.ui-skeleton span { display: block; height: 14px; border-radius: 3px; background: var(--surface-quiet); animation: ui-pulse 1.4s ease-in-out infinite; }
+.ui-skeleton span:nth-child(2n) { width: 82%; }
+.ui-skeleton span:nth-child(3n) { width: 64%; }
+@keyframes ui-pulse { 50% { opacity: .54; } }
+.ui-screen-state { min-height: 180px; display: grid; grid-template-columns: 4px minmax(0, 1fr); gap: var(--space-4); align-content: center; padding: var(--space-6); border: 1px solid var(--border-subtle); border-radius: var(--radius-surface); background: var(--surface); }
+.ui-screen-state__mark { width: 4px; height: 48px; border-radius: 2px; background: var(--text-muted); }
+.ui-screen-state--error .ui-screen-state__mark { background: var(--status-danger-text); }
+.ui-screen-state--soon .ui-screen-state__mark { background: var(--status-warning-text); }
+.ui-screen-state--restricted .ui-screen-state__mark { background: var(--status-info-text); }
+.ui-screen-state > div { min-width: 0; }
+.ui-screen-state h2 { margin: 0; font: var(--type-component); overflow-wrap: anywhere; }
+.ui-screen-state p { max-width: 42rem; margin: var(--space-1) 0 0; color: var(--text-muted); font: var(--type-support); overflow-wrap: anywhere; }
+.ui-screen-state__detail, .ui-screen-state__action { margin-top: var(--space-3); }
 
 .ui-nav-item {
   display: flex;
@@ -117,6 +148,8 @@
 
 .ui-button:focus-visible,
 .ui-field__input:focus-visible,
+.ui-password__toggle:focus-visible,
+.theme-control__choices button:focus-visible,
 .ui-nav-item:focus-visible,
 .ui-dialog:focus-visible {
   outline: 2px solid var(--focus);
@@ -126,4 +159,12 @@
 @media (prefers-reduced-motion: reduce) {
   .ui-button { transition: none; }
   .ui-button:not(:disabled):not([aria-disabled='true']):active { transform: none; }
+  .ui-spinner { animation: none; border-right-color: currentColor; opacity: .66; }
+  .ui-skeleton span { animation: none; background: var(--surface-quiet); }
+}
+
+@media (max-width: 420px) {
+  .theme-control__full-label { display: none; }
+  .theme-control__short-label { display: inline; }
+  .ui-screen-state { padding: var(--space-4); }
 }

@@ -1,6 +1,8 @@
 export { Button } from './Button';
 export { Dialog } from './Dialog';
 export { Field } from './Field';
+export { PasswordField, SelectField, TextareaField } from './Field';
+export { InlineSpinner, ScreenState, Skeleton } from './Feedback';
 export { NavItem } from './NavItem';
 export { Progress } from './Progress';
 export { Status } from './Status';
@@ -9,6 +11,7 @@ export { getTheme, getThemePreference, initializeTheme, resolveTheme, setTheme, 
 export type { Theme, ThemePreference } from './theme';
 export type { ButtonProps, ButtonVariant } from './Button';
 export type { FieldProps } from './Field';
+export type { PasswordFieldProps, SelectFieldProps, TextareaFieldProps } from './Field';
 export type { NavItemProps } from './NavItem';
 export type { ProgressProps } from './Progress';
 export type { StatusProps, StatusTone } from './Status';
