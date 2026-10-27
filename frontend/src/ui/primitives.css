@@ -98,8 +98,10 @@
 .ui-screen-state { min-height: 180px; display: grid; grid-template-columns: 4px minmax(0, 1fr); gap: var(--space-4); align-content: center; padding: var(--space-6); border: 1px solid var(--border-subtle); border-radius: var(--radius-surface); background: var(--surface); }
 .ui-screen-state__mark { width: 4px; height: 48px; border-radius: 2px; background: var(--text-muted); }
 .ui-screen-state--error .ui-screen-state__mark { background: var(--status-danger-text); }
+.ui-screen-state--success .ui-screen-state__mark { background: var(--status-success-text); }
 .ui-screen-state--soon .ui-screen-state__mark { background: var(--status-warning-text); }
 .ui-screen-state--restricted .ui-screen-state__mark { background: var(--status-info-text); }
+.ui-screen-state--unavailable .ui-screen-state__mark { background: var(--text-muted); }
 .ui-screen-state > div { min-width: 0; }
 .ui-screen-state h2 { margin: 0; font: var(--type-component); overflow-wrap: anywhere; }
 .ui-screen-state p { max-width: 42rem; margin: var(--space-1) 0 0; color: var(--text-muted); font: var(--type-support); overflow-wrap: anywhere; }

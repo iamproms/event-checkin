@@ -57,12 +57,20 @@ export function ErrorState({ title = 'Content unavailable', description, onRetry
   return <ScreenState tone="error" title={title} description={description} action={onRetry && <button className="product-button product-button--secondary" onClick={onRetry}>Try again</button>} />;
 }
 
+export function SuccessState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+  return <ScreenState tone="success" title={title} description={description} action={action} />;
+}
+
 export function ComingSoonState({ title, description, detail }: { title: string; description: string; detail?: ReactNode }) {
   return <ScreenState tone="soon" title={title} description={description} detail={detail} />;
 }
 
 export function RestrictedState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
   return <ScreenState tone="restricted" title={title} description={description} action={action} />;
+}
+
+export function UnavailableState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+  return <ScreenState tone="unavailable" title={title} description={description} action={action} />;
 }
 
 export function FilterBar({ placeholder = 'Search', count, children, value, onChange }: { placeholder?: string; count?: string; children?: ReactNode; value?: string; onChange?: (value: string) => void }) {

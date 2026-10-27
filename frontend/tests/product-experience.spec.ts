@@ -56,7 +56,9 @@ test('platform console has a coherent control-plane route map', async ({ page })
     await expect(page.getByRole('heading', { name: heading, level: 1 })).toBeVisible();
   }
   await page.getByRole('link', { name: 'Overview' }).click();
-  await expect(page.getByText('Aggregate counts and activity are synthetic')).toBeVisible();
+  await expect(page.getByText('Platform activity is unavailable')).toBeVisible();
+  await expect(page.getByText('Demo aggregate')).toHaveCount(0);
+  await expect(page.getByText('Synthetic platform registration activity')).toHaveCount(0);
 });
 
 test('platform creation takes only organization and organizer details', async ({ page }) => {

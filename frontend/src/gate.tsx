@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import jsQR from 'jsqr';
 import { eventApi, type GateSession, type RedemptionResult } from './event-api';
 import { ManagementApiError } from './management-api';
+import { safeErrorMessage } from './safe-error';
 import { ThemeControl } from './ui';
 import { StatusMark } from './product/components';
 import { Icon } from './product/icons';
@@ -13,7 +14,7 @@ type Assignment = { event_id: string; event_name: string; gate_id: string; gate_
 type ScannerState = 'loading' | 'unauthorized' | 'ready' | 'scanning' | 'verifying' | 'result' | 'error';
 type BarcodeDetectorLike = { detect(source: CanvasImageSource): Promise<{ rawValue: string }[]> };
 type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike;
-function readable(error: unknown) { return error instanceof Error ? error.message : 'The request could not be completed.'; }
+function readable(error: unknown) { return safeErrorMessage(error, 'The scanner could not complete the request.'); }
 function sessionAssignments(session: GateSession | null): Assignment[] {
   if (!session) return [];
   if (session.assignments?.length) return session.assignments;

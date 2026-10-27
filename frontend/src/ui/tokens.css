@@ -67,7 +67,7 @@
   --status-info-text: #334e68;
   --status-info-bg: #eaf1f7;
   --overlay: rgb(17 24 20 / 48%);
-  --floating-shadow: 0 8px 24px rgb(25 30 25 / 12%);
+  --floating-shadow: 0 4px 12px rgb(25 30 25 / 7%);
   --ease-out: cubic-bezier(.23, 1, .32, 1);
   --motion-press: 120ms;
   --motion-overlay: 180ms;
@@ -103,7 +103,7 @@
   --status-info-text: #d8eaf8;
   --status-info-bg: #273b4d;
   --overlay: rgb(0 0 0 / 68%);
-  --floating-shadow: 0 12px 28px rgb(0 0 0 / 38%);
+  --floating-shadow: 0 6px 16px rgb(0 0 0 / 24%);
 }
 
 [data-density='compact'] {

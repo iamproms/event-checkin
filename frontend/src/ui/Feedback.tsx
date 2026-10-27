@@ -8,7 +8,7 @@ export function Skeleton({ lines = 3, label = 'Loading content' }: { lines?: num
   return <div className="ui-skeleton" role="status" aria-label={label}>{Array.from({ length: lines }, (_, index) => <span key={index} />)}</div>;
 }
 
-export type ScreenStateTone = 'empty' | 'error' | 'soon' | 'restricted';
+export type ScreenStateTone = 'empty' | 'error' | 'success' | 'soon' | 'restricted' | 'unavailable';
 
 export function ScreenState({ tone, title, description, action, detail }: { tone: ScreenStateTone; title: string; description: string; action?: ReactNode; detail?: ReactNode }) {
   return <section className={`ui-screen-state ui-screen-state--${tone}`} role={tone === 'error' ? 'alert' : undefined}>

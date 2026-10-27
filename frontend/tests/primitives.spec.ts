@@ -24,6 +24,8 @@ test('labels, errors, semantic status and control states are exposed', async ({ 
   await expect(page.getByRole('alert')).toContainText('Enter a valid email address to continue.');
   await expect(page.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Do not admit a second time; seek a supervisor if needed.')).toBeVisible();
+  await expect(page.getByText('Import completed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Telemetry unavailable', { exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar', { name: 'Import preview' })).toHaveAttribute('value', '45');
 });
 
