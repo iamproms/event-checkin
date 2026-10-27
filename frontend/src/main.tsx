@@ -172,11 +172,12 @@ function App() {
     reset: 'Choose a new password for this organization.', recover: 'We will send a neutral recovery response to the address provided.',
     session: 'Your secure organization session is active.',
   };
+  const linkUnavailable = (state === 'invite' || state === 'reset') && !linkToken;
 
   return <AuthShell area="Organizer access" title={titles[state]} description={descriptions[state]}><section aria-labelledby="auth-title">
     {error && <Status tone="danger" title={error.startsWith('Too many attempts') ? 'Sign-in temporarily limited' : 'Could not continue'} instruction={error} announce="assertive" />}
     {message && <Status tone="info" title="Update" instruction={message} announce="polite" />}
-    {state === "session" ? <div className="stack">
+    {linkUnavailable ? <div className="stack"><Status tone="warning" title="This link is incomplete" instruction="Open the full invitation or password-reset link from your email. If the link has expired, request a new one." announce="polite"/><Button variant="secondary" onClick={() => { history.replaceState(null, '', '/'); setState('login'); }}>Return to sign in</Button></div> : state === "session" ? <div className="stack">
       {codes.length > 0 && <div><h2>Save recovery codes</h2><p>Each code works once. Store them safely.</p><pre className="recovery-codes">{codes.join("\n")}</pre></div>}
       <a className="workspace-link" href={destination === 'platform' ? '/platform-console.html' : ['gate_scanner','gate_staff','gate_supervisor'].includes(role) ? '/gate.html' : '/workspace.html'}>{destination === 'platform' ? 'Open Platform Console' : ['gate_scanner','gate_staff','gate_supervisor'].includes(role) ? 'Open assigned gate' : 'Open organizer workspace'}</a>
       <Button variant="secondary" onClick={logout} loading={busy} loadingText="Signing out…">Sign out</Button>
@@ -184,9 +185,9 @@ function App() {
     </div> : <form onSubmit={submit} className="stack">
       {state === 'select_context' && <div className="stack" role="group" aria-label="Available workspaces">{contexts.map(context => <Button key={context.id} variant="secondary" loading={busy} onClick={() => void chooseContext(context.id)}>{context.name} · {context.role.replaceAll('_',' ')}</Button>)}</div>}
       {(state === "login" || state === "recover") && <Field label="Email address" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />}
-      {(state === "login" || state === "invite" || state === "reset") && <PasswordField label="Password" autoComplete={state === "login" ? "current-password" : "new-password"} required minLength={state === "login" ? undefined : 12} maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} />}
+      {(state === "login" || state === "invite" || state === "reset") && <PasswordField label="Password" autoComplete={state === "login" ? "current-password" : "new-password"} hint={state === 'login' ? undefined : 'Use at least 12 characters. Password managers are supported.'} required minLength={state === "login" ? undefined : 12} maxLength={128} value={password} onChange={(e) => setPassword(e.target.value)} />}
       {state === "enroll" && <><Button variant="secondary" onClick={enroll} loading={busy} loadingText="Generating setup key…">Generate setup key</Button>{secret && <p className="key">Setup key: <code>{secret}</code></p>}</>}
-      {(state === "mfa" || state === "enroll") && <><Field label={recovery ? "Recovery code" : "Six-digit code"} inputMode={recovery ? "text" : "numeric"} autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />{state === "mfa" && <Button variant="tertiary" onClick={() => setRecovery(!recovery)}>{recovery ? "Use authenticator code" : "Use a recovery code"}</Button>}</>}
+      {(state === "mfa" || state === "enroll") && <><Field label={recovery ? "Recovery code" : "Six-digit code"} inputMode={recovery ? "text" : "numeric"} autoComplete="one-time-code" pattern={recovery ? undefined : '[0-9]{6}'} minLength={recovery ? undefined : 6} maxLength={recovery ? 128 : 6} hint={recovery ? 'Enter one unused recovery code.' : 'Enter the current six-digit authenticator code.'} required value={code} onChange={(e) => setCode(e.target.value)} />{state === "mfa" && <Button variant="tertiary" onClick={() => { setRecovery(!recovery); setCode(''); }}>{recovery ? "Use authenticator code" : "Use a recovery code"}</Button>}</>}
       {state !== 'select_context' && <Button type="submit" loading={busy} loadingText="Working…" disabled={state === "enroll" && !secret}>{state === "login" ? "Sign in" : state === "recover" ? "Send reset link" : state === "invite" ? "Accept invitation" : state === "reset" ? "Update password" : "Verify code"}</Button>}
       {state === "login" && <Button variant="tertiary" onClick={() => setState("recover")}>Forgot password?</Button>}
       {state === "recover" && <Button variant="tertiary" onClick={() => setState("login")}>Back to sign in</Button>}

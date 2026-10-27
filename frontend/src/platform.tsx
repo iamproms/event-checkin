@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Dialog, Field, Status } from './ui';
+import { Button, Dialog, Field, PasswordField, Status } from './ui';
 import { describeDomain, type DomainState } from './domain-vocabulary';
 import { getJson, ManagementApiError, mutateJson } from './management-api';
 import { AuthShell } from './product/AuthShell';
@@ -120,7 +120,7 @@ function App() {
     {state === 'login' && <form className="stack" onSubmit={signIn}>
       <Field label="Verified staff email" type="email" autoComplete="username" value={email}
         onChange={(event) => setEmail(event.target.value)} required />
-      <Field label="Password" type="password" autoComplete="current-password" value={password}
+      <PasswordField label="Password" autoComplete="current-password" value={password}
         onChange={(event) => setPassword(event.target.value)} required />
       <Button type="submit" loading={busy}>Continue</Button>
     </form>}
@@ -135,7 +135,8 @@ function App() {
       </>}
       <form className="stack" onSubmit={verify}>
         <Field label={recovery ? 'Recovery code' : 'Authenticator code'} value={code}
-          inputMode={recovery ? 'text' : 'numeric'} autoComplete="one-time-code"
+          inputMode={recovery ? 'text' : 'numeric'} autoComplete="one-time-code" pattern={recovery ? undefined : '[0-9]{6}'} minLength={recovery ? undefined : 6} maxLength={recovery ? 128 : 6}
+          hint={recovery ? 'Enter one unused recovery code.' : 'Enter the current six-digit code.'}
           onChange={(event) => setCode(event.target.value)} required />
         {state === 'mfa' && <Button variant="tertiary" onClick={() => setRecovery(!recovery)}>
           {recovery ? 'Use authenticator' : 'Use a recovery code'}
