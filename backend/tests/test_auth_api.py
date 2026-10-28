@@ -93,6 +93,4 @@ def test_successful_login_revokes_previous_session_and_challenge(app_factory: ob
         assert response.status_code == 200
         assert auth.revoked == ["previous-session"]
         assert auth.cancelled == ["previous-challenge"]
-        assert any(
-            "new-session" in cookie for cookie in response.headers.get_list("set-cookie")
-        )
+        assert any("new-session" in cookie for cookie in response.headers.get_list("set-cookie"))

@@ -556,20 +556,35 @@ def test_gate_staff_directory_reassignment_and_revocation(
                   (id,tenant_id,slug,name,starts_at,ends_at,timezone,status,pii_purge_due_at)
                   VALUES (:id,:tenant,:slug,'Staff assignment test',:start,:end,
                           'Africa/Lagos','draft',:purge)"""),
-                {"id": event_id, "tenant": auth_db.tenant_a, "slug": f"staff-{event_id.hex[:10]}",
-                 "start": now, "end": now + timedelta(hours=2),
-                 "purge": now + timedelta(days=90, hours=2)},
+                {
+                    "id": event_id,
+                    "tenant": auth_db.tenant_a,
+                    "slug": f"staff-{event_id.hex[:10]}",
+                    "start": now,
+                    "end": now + timedelta(hours=2),
+                    "purge": now + timedelta(days=90, hours=2),
+                },
             )
             for gate_id, gate_name in ((original_gate, "A"), (replacement_gate, "B")):
                 db.execute(
-                    text("INSERT INTO gates (id,tenant_id,event_id,name,status) "
-                         "VALUES (:id,:tenant,:event,:name,'active')"),
-                    {"id": gate_id, "tenant": auth_db.tenant_a,
-                     "event": event_id, "name": gate_name},
+                    text(
+                        "INSERT INTO gates (id,tenant_id,event_id,name,status) "
+                        "VALUES (:id,:tenant,:event,:name,'active')"
+                    ),
+                    {
+                        "id": gate_id,
+                        "tenant": auth_db.tenant_a,
+                        "event": event_id,
+                        "name": gate_name,
+                    },
                 )
         auth.issue_invitation(
-            "auth-a.example.test", admin_session, address, "gate_scanner",
-            event_id, original_gate,
+            "auth-a.example.test",
+            admin_session,
+            address,
+            "gate_scanner",
+            event_id,
+            original_gate,
         )
         invitation = parse_qs(urlsplit(email.links[-1]).fragment)["token"][0]
         state, scanner_session = auth.accept_invitation(
@@ -579,16 +594,15 @@ def test_gate_staff_directory_reassignment_and_revocation(
         listing = auth.list_gate_staff("auth-a.example.test", admin_session)
         member = next(item for item in listing if item["email"] == address)
         target = UUID(str(member["user_id"]))
-        assert member["assignments"] == [
-            {"event_id": str(event_id), "gate_id": str(original_gate)}
-        ]
+        assert member["assignments"] == [{"event_id": str(event_id), "gate_id": str(original_gate)}]
         auth.reassign_gate_staff(
             "auth-a.example.test", admin_session, target, event_id, replacement_gate
         )
         with pytest.raises(AuthDenied):
             auth.current("auth-a.example.test", scanner_session)
         moved = next(
-            item for item in auth.list_gate_staff("auth-a.example.test", admin_session)
+            item
+            for item in auth.list_gate_staff("auth-a.example.test", admin_session)
             if item["email"] == address
         )
         assert moved["assignments"] == [
@@ -596,7 +610,8 @@ def test_gate_staff_directory_reassignment_and_revocation(
         ]
         auth.revoke_tenant_membership("auth-a.example.test", admin_session, target)
         revoked = next(
-            item for item in auth.list_gate_staff("auth-a.example.test", admin_session)
+            item
+            for item in auth.list_gate_staff("auth-a.example.test", admin_session)
             if item["email"] == address
         )
         assert revoked["status"] == "revoked"

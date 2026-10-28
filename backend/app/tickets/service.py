@@ -491,6 +491,7 @@ class TicketService:
                     logo_png = None
             message = ticket_message(
                 intent_id=intent_id,
+                tenant_id=job.tenant_id,
                 recipient=recipient,
                 credential=credential,
                 event_name=event_name,

@@ -71,13 +71,23 @@ def process_job(job_id: str) -> None:
             )
         if current.ticket_keyring_json is not None:
             from app.branding.assets import S3BrandingStorage
+            from app.delivery.brevo import BrevoTransactionalClient
             from app.tickets.crypto import TicketKeyring
-            from app.tickets.email import DisabledTicketTransport, LocalSmtpTicketTransport
+            from app.tickets.email import (
+                BrevoTicketTransport,
+                DisabledTicketTransport,
+                LocalSmtpTicketTransport,
+            )
             from app.tickets.service import TicketService
             from app.worker.storage import s3_storage
 
             ticket_transport = (
-                LocalSmtpTicketTransport(
+                BrevoTicketTransport(
+                    BrevoTransactionalClient(current.brevo_api_key.get_secret_value()),
+                    current.email_from,
+                )
+                if current.brevo_api_key and current.email_from
+                else LocalSmtpTicketTransport(
                     current.email_smtp_host, current.email_smtp_port, current.email_from
                 )
                 if current.app_env in {Environment.LOCAL, Environment.TEST}

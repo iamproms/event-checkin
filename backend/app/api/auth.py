@@ -298,7 +298,12 @@ def invite(
     raw = request.cookies.get(SESSION_COOKIE, "")
     try:
         auth.issue_invitation(
-            hostname(request), raw, body.email, body.role, body.event_id, body.gate_id,
+            hostname(request),
+            raw,
+            body.email,
+            body.role,
+            body.event_id,
+            body.gate_id,
             request.state.trusted_origin,
         )
     except (AuthDenied, DeliveryUnavailable, ValueError) as exc:
@@ -370,8 +375,11 @@ def reassign_gate_staff(
 ) -> dict[str, str]:
     try:
         auth.reassign_gate_staff(
-            hostname(request), request.cookies.get(SESSION_COOKIE, ""),
-            user_id, body.event_id, body.gate_id,
+            hostname(request),
+            request.cookies.get(SESSION_COOKIE, ""),
+            user_id,
+            body.event_id,
+            body.gate_id,
         )
     except (AuthDenied, Forbidden) as exc:
         raise handle_error(exc) from exc

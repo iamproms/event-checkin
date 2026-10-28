@@ -44,4 +44,3 @@ def readiness(engine: Engine, response: Response) -> ReadinessResponse:
             worker="not_configured",
         ),
     )
-

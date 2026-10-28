@@ -1,5 +1,6 @@
 """Transactional ticket presentation and provider-neutral delivery boundary."""
 
+import base64
 import io
 import re
 import smtplib
@@ -35,6 +36,7 @@ def _sender_label(value: str, fallback: str) -> str:
 
 @dataclass(frozen=True)
 class TicketMessage:
+    tenant_id: UUID
     recipient: str
     sender_name: str
     subject: str
@@ -92,6 +94,60 @@ class LocalSmtpTicketTransport:
         return f"local-{message.intent_id}"
 
 
+class BrevoTicketTransport:
+    """Brevo API transport keyed by the durable delivery-intent UUID."""
+
+    def __init__(self, client: object, sender: str) -> None:
+        self.client = client
+        self.sender = single_email_address(sender)
+
+    def send(self, message: TicketMessage) -> str:
+        from app.delivery.brevo import BrevoTransactionalClient
+
+        if not isinstance(self.client, BrevoTransactionalClient):
+            raise TicketDeliveryUnavailable("Transactional ticket email is unavailable")
+        attachments = [
+            {
+                "name": "event-ticket-qr.png",
+                "content": base64.b64encode(message.qr_png).decode("ascii"),
+            }
+        ]
+        if message.logo_png is not None:
+            attachments.append(
+                {
+                    "name": "organizer-logo.png",
+                    "content": base64.b64encode(message.logo_png).decode("ascii"),
+                }
+            )
+        html = re.sub(
+            r'<img src="cid:organizer-logo"[^>]+/>',
+            "",
+            message.html,
+        )
+        html = re.sub(
+            r'<img src="cid:ticket-qr"[^>]+/>',
+            "<p><strong>Your entry QR code is attached as event-ticket-qr.png.</strong></p>",
+            html,
+        )
+        return self.client.send(
+            {
+                "sender": {"email": self.sender, "name": message.sender_name},
+                "to": [{"email": single_email_address(message.recipient)}],
+                "subject": message.subject,
+                "textContent": message.text,
+                "htmlContent": html,
+                "attachment": attachments,
+                "headers": {
+                    "X-Mailin-custom": (
+                        f"intent_id={message.intent_id}&tenant_id={message.tenant_id}"
+                    )
+                },
+                "tags": ["event-checkin-ticket"],
+            },
+            str(message.intent_id),
+        )
+
+
 def render_qr(credential: str) -> bytes:
     qrcode = import_module("qrcode")
     image = qrcode.make(credential, error_correction=qrcode.constants.ERROR_CORRECT_M, border=4)
@@ -103,6 +159,7 @@ def render_qr(credential: str) -> bytes:
 def ticket_message(
     *,
     intent_id: UUID,
+    tenant_id: UUID,
     recipient: str,
     credential: str,
     event_name: str,
@@ -157,6 +214,7 @@ def ticket_message(
         "</main></body></html>"
     )
     return TicketMessage(
+        tenant_id=tenant_id,
         recipient=single_email_address(recipient),
         sender_name=clean_sender,
         subject=f"Your ticket for {event_name}",

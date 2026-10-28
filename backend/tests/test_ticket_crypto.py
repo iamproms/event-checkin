@@ -45,6 +45,7 @@ def test_rotation_retains_old_verification_until_old_key_is_removed() -> None:
 def test_ticket_email_escapes_brand_and_event_and_renders_qr() -> None:
     message = ticket_message(
         intent_id=uuid4(),
+        tenant_id=uuid4(),
         recipient="ada@example.test",
         credential="v1." + "A" * 43,
         event_name="Demo <script>",
@@ -69,6 +70,7 @@ def test_ticket_email_escapes_brand_and_event_and_renders_qr() -> None:
 def test_ticket_email_rejects_header_control_characters() -> None:
     message = ticket_message(
         intent_id=uuid4(),
+        tenant_id=uuid4(),
         recipient="ada@example.test",
         credential="v1." + "A" * 43,
         event_name="Demo",

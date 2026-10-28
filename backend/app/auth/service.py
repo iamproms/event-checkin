@@ -556,9 +556,7 @@ class AuthService:
                 .join(User, User.id == TenantMembership.user_id)
                 .where(
                     TenantMembership.tenant_id == tenant,
-                    TenantMembership.role.in_(
-                        ["gate_scanner", "gate_staff", "gate_supervisor"]
-                    ),
+                    TenantMembership.role.in_(["gate_scanner", "gate_staff", "gate_supervisor"]),
                 )
                 .order_by(User.email)
             ).all()
@@ -635,16 +633,20 @@ class AuthService:
                 )
                 .with_for_update()
             ).all()
-            if len(current) == 1 and (
-                current[0].event_id, current[0].gate_id
-            ) == (event_id, gate_id):
+            if len(current) == 1 and (current[0].event_id, current[0].gate_id) == (
+                event_id,
+                gate_id,
+            ):
                 return
             for assignment in current:
                 assignment.revoked_at = utcnow()
             db.add(
                 EventAssignment(
-                    tenant_id=tenant, event_id=event_id, gate_id=gate_id,
-                    user_id=target, valid_from=utcnow(),
+                    tenant_id=tenant,
+                    event_id=event_id,
+                    gate_id=gate_id,
+                    user_id=target,
+                    valid_from=utcnow(),
                 )
             )
             db.execute(
@@ -657,7 +659,10 @@ class AuthService:
                 .values(revoked_at=utcnow())
             )
             self._audit(
-                db, "gate_staff.assignment_changed", actor.id, tenant,
+                db,
+                "gate_staff.assignment_changed",
+                actor.id,
+                tenant,
                 {"target_user_id": str(target), "event_id": str(event_id), "gate_id": str(gate_id)},
             )
 
@@ -817,8 +822,12 @@ class AuthService:
             return "session", self._session(db, user.id, tenant, invite.role, False)
 
     def request_reset(
-        self, hostname: str, email: str, ip: str,
-        shared_origin: str | None = None, shared_tenant: UUID | None = None,
+        self,
+        hostname: str,
+        email: str,
+        ip: str,
+        shared_origin: str | None = None,
+        shared_tenant: UUID | None = None,
     ) -> None:
         email = single_email_address(email)
         if isinstance(self.email, DisabledEmailDelivery):

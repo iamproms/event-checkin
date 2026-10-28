@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     email_smtp_host: str | None = None
     email_smtp_port: int = 1025
     email_from: str | None = None
+    email_from_name: str = "Event Check-in"
+    brevo_api_key: SecretStr | None = None
+    brevo_webhook_token: SecretStr | None = None
     ticket_keyring_json: SecretStr | None = None
     ticket_active_key_version: int = 1
     ticket_issuance_enabled: bool = False
@@ -226,6 +229,16 @@ class Settings(BaseSettings):
                     and parsed.query.get("sslmode") != "verify-full"
                 ):
                     raise ValueError("production database URL requires sslmode=verify-full")
+            if self.ticket_issuance_enabled and (
+                self.brevo_api_key is None
+                or self.brevo_webhook_token is None
+                or self.email_from is None
+            ):
+                raise ValueError(
+                    "remote ticket issuance requires Brevo credentials, webhook token, and sender"
+                )
+        if self.brevo_api_key is not None and self.email_from is None:
+            raise ValueError("Brevo delivery requires EMAIL_FROM")
         return self
 
 

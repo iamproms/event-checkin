@@ -1,5 +1,6 @@
 """Event route security contract without a database substitute."""
 
+import os
 from collections.abc import Awaitable, Callable
 
 import pytest
@@ -9,6 +10,11 @@ from pydantic import ValidationError
 
 from app.api.events import CreateEvent, EditEvent, router
 from app.auth.service import Forbidden
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("SKIP_SYNC_ASGI_TESTS") == "1",
+    reason="Local sandbox cannot schedule Starlette's sync endpoint threadpool",
+)
 
 
 class DenyingService:

@@ -1,5 +1,9 @@
+import logging
+import re
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -18,14 +22,17 @@ from app.api.registration import router as registration_router
 from app.api.shared import router as shared_router
 from app.api.tickets import bulk_router as tickets_bulk_router
 from app.api.tickets import router as tickets_router
+from app.api.webhooks import brevo_authorized
+from app.api.webhooks import router as webhooks_router
 from app.auth.corpus import CompromisedPasswordCorpus
-from app.auth.email import DisabledEmailDelivery, SmtpEmailDelivery
+from app.auth.email import BrevoEmailDelivery, DisabledEmailDelivery, SmtpEmailDelivery
 from app.auth.service import AuthService
 from app.branding.assets import BrandingStorage, S3BrandingStorage, UnavailableBrandingStorage
 from app.branding.service import BrandingService
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.db.engine import build_engine
+from app.delivery.brevo import BrevoTransactionalClient
 from app.events.service import EventService
 from app.operations.service import EventOperationsService
 from app.registration.service import RegistrationService
@@ -35,9 +42,16 @@ from app.tenancy.domains import DisabledDomainProvider, DomainService, FixtureDo
 from app.tenancy.platform_auth import PlatformAuth
 from app.tenancy.shared_host import CONTEXT_COOKIE, shared_host_tenant, verify_context
 from app.tickets.crypto import TicketKeyring, TicketKeyUnavailable
-from app.tickets.email import DisabledTicketTransport, LocalSmtpTicketTransport
+from app.tickets.email import (
+    BrevoTicketTransport,
+    DisabledTicketTransport,
+    LocalSmtpTicketTransport,
+)
 from app.tickets.service import TicketService
 from app.worker.storage import s3_storage
+
+request_logger = logging.getLogger("eventcheckin.requests")
+REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{1,100}$")
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None) -> FastAPI:
@@ -67,9 +81,41 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app = FastAPI(title="Event Check-in API", version="0.1.0", lifespan=lifespan)
 
     @app.middleware("http")
+    async def request_observability(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        supplied = request.headers.get("x-request-id", "")
+        request_id = supplied if REQUEST_ID.fullmatch(supplied) else str(uuid4())
+        started = time.perf_counter()
+        response = await call_next(request)
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        request_logger.info(
+            "request_complete",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "route": route_path,
+                "status_code": response.status_code,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    @app.middleware("http")
     async def trusted_authority(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
+        if request.url.path == "/api/v1/webhooks/brevo":
+            if not brevo_authorized(
+                settings.brevo_webhook_token, request.headers.get("authorization")
+            ):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": {"code": "WEBHOOK_AUTH_INVALID"}},
+                )
+            return await call_next(request)
         if request.url.path.startswith("/api/"):
             try:
                 host, origin = canonical_authority(request, settings)
@@ -124,6 +170,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
                 "/api/v1/branding",
                 "/api/v1/public",
                 "/api/v1/gate",
+                "/api/v1/webhooks",
             )
         ):
             response.headers["Cache-Control"] = "no-store"
@@ -141,6 +188,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.include_router(shared_router)
     app.include_router(event_operations_router)
     app.include_router(gate_router)
+    app.include_router(webhooks_router)
     app.state.settings = settings
     app.state.auth_service = None
     app.state.platform_auth = None
@@ -150,11 +198,18 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.registration_service = None
     app.state.ticket_service = None
     app.state.event_operations_service = None
+    app.state.database_engine = database_engine
     app.state.email_delivery = DisabledEmailDelivery()
     branding_storage: BrandingStorage = UnavailableBrandingStorage()
     if identity_engine is not None:
         email = (
-            SmtpEmailDelivery(
+            BrevoEmailDelivery(
+                BrevoTransactionalClient(settings.brevo_api_key.get_secret_value()),
+                settings.email_from,
+                settings.email_from_name,
+            )
+            if settings.brevo_api_key and settings.email_from
+            else SmtpEmailDelivery(
                 settings.email_smtp_host, settings.email_smtp_port, settings.email_from
             )
             if settings.app_env.value in {"local", "test"}
@@ -187,7 +242,12 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     except TicketKeyUnavailable:
         ticket_keys = None
     ticket_transport = (
-        LocalSmtpTicketTransport(
+        BrevoTicketTransport(
+            BrevoTransactionalClient(settings.brevo_api_key.get_secret_value()),
+            settings.email_from,
+        )
+        if settings.brevo_api_key and settings.email_from
+        else LocalSmtpTicketTransport(
             settings.email_smtp_host, settings.email_smtp_port, settings.email_from
         )
         if settings.app_env.value in {"local", "test"}

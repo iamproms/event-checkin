@@ -54,4 +54,3 @@ def test_error_hides_database_password() -> None:
             database_url="postgresql+psycopg://u:sensitive-value@localhost/app",
         )
     assert "sensitive-value" not in str(error.value)
-

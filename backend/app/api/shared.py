@@ -58,9 +58,7 @@ def shared_context(request: Request) -> dict[str, bool]:
 
 
 @router.post("/password-reset/request", dependencies=[Depends(csrf)])
-def request_password_reset(
-    body: SharedReset, request: Request, pair: Services
-) -> dict[str, str]:
+def request_password_reset(body: SharedReset, request: Request, pair: Services) -> dict[str, str]:
     auth, _ = pair
     try:
         email = single_email_address(body.email)
@@ -71,9 +69,7 @@ def request_password_reset(
             AuthService._limit(
                 limiter, f"shared:reset:ip:{request.state.client_address}", utcnow(), 20
             )
-            AuthService._limit(
-                limiter, f"shared:reset:account:{email.casefold()}", utcnow(), 5
-            )
+            AuthService._limit(limiter, f"shared:reset:account:{email.casefold()}", utcnow(), 5)
     except AuthDenied:
         return {"message": "If the account is eligible, a reset link will be sent"}
     # A password is global to the staff identity. One active tenant membership
@@ -84,16 +80,18 @@ def request_password_reset(
         if user is not None and user.status == "active":
             tenant = db.execute(
                 text(
-                    "SELECT tenant_id FROM shared_login_contexts(:user) "
-                    "ORDER BY tenant_id LIMIT 1"
+                    "SELECT tenant_id FROM shared_login_contexts(:user) ORDER BY tenant_id LIMIT 1"
                 ),
                 {"user": user.id},
             ).scalar_one_or_none()
     if tenant is not None:
         try:
             auth.request_reset(
-                shared_host_tenant(tenant), email, request.state.client_address,
-                request.state.trusted_origin, tenant,
+                shared_host_tenant(tenant),
+                email,
+                request.state.client_address,
+                request.state.trusted_origin,
+                tenant,
             )
         except AuthDenied:
             pass
