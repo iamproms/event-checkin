@@ -10,7 +10,7 @@ participant field.
 
 ## Infrastructure and boundary
 
-1. `GET https://PUBLIC_HOST/health` returns `200 {"status":"ok"}`.
+1. `GET https://RENDER_ORIGIN/health` returns `200 {"status":"ok"}`.
 2. `GET https://PUBLIC_HOST/ready` returns 200 with API/database ready. Treat
    worker `not_configured` as informational and separately verify Render worker
    and dispatcher state.
