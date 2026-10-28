@@ -39,10 +39,10 @@ def test_import_mapping_accepts_a_true_email_only_export() -> None:
 
 
 def test_xlsx_import_rejects_formula_cells() -> None:
-    sheet = b'''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    sheet = b"""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
       <sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>email</t></is></c></row>
       <row r="2"><c r="A2"><f>HYPERLINK("https://example.test")</f><v>0</v></c></row>
-      </sheetData></worksheet>'''
+      </sheetData></worksheet>"""
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
         archive.writestr("xl/worksheets/sheet1.xml", sheet)
@@ -51,11 +51,11 @@ def test_xlsx_import_rejects_formula_cells() -> None:
 
 
 def test_xlsx_import_rejects_values_outside_mapped_columns() -> None:
-    sheet = b'''<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    sheet = b"""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
       <sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>email</t></is></c></row>
       <row r="2"><c r="A2" t="inlineStr"><is><t>ada@example.test</t></is></c>
       <c r="B2" t="inlineStr"><is><t>unmapped</t></is></c></row>
-      </sheetData></worksheet>'''
+      </sheetData></worksheet>"""
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
         archive.writestr("xl/worksheets/sheet1.xml", sheet)

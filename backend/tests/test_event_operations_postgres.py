@@ -360,22 +360,47 @@ def test_same_credential_at_five_gates_is_accepted_once(pg: Harness) -> None:
         notice_version=1,
         notice_acknowledged=True,
     )
+    registrations.register(
+        host,
+        draft.slug,
+        "rehearsal-peer",
+        full_name="Revoked Synthetic Attendee",
+        email="revoked-rehearsal@example.test",
+        phone="+2348012345679",
+        custom_answers={},
+        form_version=draft.form_schema_version,
+        notice_version=1,
+        notice_acknowledged=True,
+    )
     keys = TicketKeyring({1: b"z" * 32}, 1)
     tickets = TicketService(pg.runtime, pg.auth, keys, MemoryTicketTransport())
     with Session(pg.owner) as db:
-        issue = db.scalar(
-            select(JobRecord).where(
-                JobRecord.job_type == "ticket.issue", JobRecord.event_id == draft.id
+        issue_jobs = list(
+            db.scalars(
+                select(JobRecord).where(
+                    JobRecord.job_type == "ticket.issue", JobRecord.event_id == draft.id
+                )
             )
         )
-        assert issue is not None
-        db.expunge(issue)
-    with authorized_tenant_session(pg.runtime, tenant) as db:
-        tickets.issue_job(db, issue)
+        assert len(issue_jobs) == 2
+        for issue in issue_jobs:
+            db.expunge(issue)
+    for issue in issue_jobs:
+        with authorized_tenant_session(pg.runtime, tenant) as db:
+            tickets.issue_job(db, issue)
     with Session(pg.owner) as db:
-        ticket = db.scalar(select(Ticket).where(Ticket.event_id == draft.id))
-        registration = db.scalar(select(Registration).where(Registration.event_id == draft.id))
-        assert ticket is not None and registration is not None
+        registration = db.scalar(
+            select(Registration).where(Registration.email == "rehearsal@example.test")
+        )
+        revoked_registration = db.scalar(
+            select(Registration).where(Registration.email == "revoked-rehearsal@example.test")
+        )
+        assert registration is not None and revoked_registration is not None
+        ticket = db.scalar(select(Ticket).where(Ticket.registration_id == registration.id))
+        revoked_ticket = db.scalar(
+            select(Ticket).where(Ticket.registration_id == revoked_registration.id)
+        )
+        assert ticket is not None and revoked_ticket is not None
         credential = keys.decrypt(
             ticket.token_ciphertext,
             ticket.key_version,
@@ -384,20 +409,130 @@ def test_same_credential_at_five_gates_is_accepted_once(pg: Harness) -> None:
             registration.id,
             ticket.id,
         )
+        revoked_credential = keys.decrypt(
+            revoked_ticket.token_ciphertext,
+            revoked_ticket.key_version,
+            tenant,
+            draft.id,
+            revoked_registration.id,
+            revoked_ticket.id,
+        )
+        revoked_ticket_id = revoked_ticket.id
+    with pg.owner.begin() as db:
+        db.execute(
+            text("UPDATE tickets SET status='revoked' WHERE id=:ticket"),
+            {"ticket": revoked_ticket_id},
+        )
     operations = EventOperationsService(pg.runtime, pg.auth, keys)
     with ThreadPoolExecutor(max_workers=5) as pool:
-        outcomes = list(
+        results = list(
             pool.map(
-                lambda gate: operations.redeem(host, session, draft.id, gate.id, credential)[
-                    "outcome"
-                ],
+                lambda gate: operations.redeem(host, session, draft.id, gate.id, credential),
                 gates,
             )
         )
+    outcomes = [result["outcome"] for result in results]
     assert outcomes.count("accepted") == 1
     assert outcomes.count("duplicate") == 4
+    assert [result["reason_code"] for result in results].count("ACCEPTED") == 1
+    assert [result["reason_code"] for result in results].count("DUPLICATE_ADMISSION") == 4
+    revoked = operations.redeem(host, session, draft.id, gates[0].id, revoked_credential)
+    assert (revoked["outcome"], revoked["reason_code"]) == ("revoked", "REVOKED_TICKET")
+    invalid = operations.redeem(host, session, draft.id, gates[0].id, "not-a-ticket")
+    assert (invalid["outcome"], invalid["reason_code"]) == ("invalid", "INVALID_TICKET")
     attendance = operations.attendance(host, session, draft.id)
     assert attendance["checked_in"] == 1
     assert attendance["duplicate_scans"] == 4
     assert sum(gate["checked_in"] for gate in attendance["gates"]) == 1
     assert "rehearsal@example.test" in operations.attendance_csv(host, session, draft.id)
+
+
+def test_gate_context_rejections_have_stable_reason_codes(pg: Harness) -> None:
+    _tenant, host, session = owner(pg)
+    now = datetime.now(UTC)
+    events = EventService(pg.runtime, pg.auth)
+    operations = EventOperationsService(pg.runtime, pg.auth, TicketKeyring({1: b"r" * 32}, 1))
+
+    def context_event(
+        slug: str,
+        opens: datetime | None,
+        closes: datetime | None,
+        *,
+        force_publish: bool = False,
+    ) -> tuple[object, object]:
+        event = events.create(
+            host,
+            session,
+            slug=slug,
+            name=f"Reason code {slug}",
+            starts_at=now - timedelta(hours=1),
+            ends_at=now + timedelta(hours=1),
+            timezone="Africa/Lagos",
+        )
+        configured = events.edit(
+            host,
+            session,
+            event.id,
+            event.revision,
+            name=event.name,
+            location=None,
+            starts_at=event.starts_at,
+            ends_at=event.ends_at,
+            timezone=event.timezone,
+            registration_opens_at=now - timedelta(hours=2),
+            registration_closes_at=now + timedelta(minutes=30),
+            checkin_opens_at=opens,
+            checkin_closes_at=closes,
+        )
+        gate = events.save_gate(host, session, event.id, name="Context gate")
+        if force_publish:
+            # Construct an intentionally incomplete legacy record without weakening
+            # the production transition or schedule-immutability guards.
+            with pg.owner.begin() as db:
+                db.execute(
+                    text("UPDATE events SET status='published' WHERE id=:event"),
+                    {"event": event.id},
+                )
+        else:
+            events.transition(host, session, event.id, configured.revision, "published")
+        return event, gate
+
+    event, gate = context_event(
+        "reason-code-availability",
+        now - timedelta(minutes=30),
+        now + timedelta(minutes=30),
+    )
+    with pg.owner.begin() as db:
+        db.execute(text("UPDATE gates SET status='inactive' WHERE id=:gate"), {"gate": gate.id})
+    assert operations.redeem(host, session, event.id, gate.id, "invalid")["reason_code"] == (
+        "GATE_UNAVAILABLE"
+    )
+    events.transition(host, session, event.id, 3, "cancelled")
+    assert operations.redeem(host, session, event.id, gate.id, "invalid")["reason_code"] == (
+        "EVENT_UNAVAILABLE"
+    )
+
+    incomplete, incomplete_gate = context_event(
+        "reason-code-window", None, None, force_publish=True
+    )
+    assert operations.redeem(host, session, incomplete.id, incomplete_gate.id, "invalid")[
+        "reason_code"
+    ] == ("CHECKIN_WINDOW_UNAVAILABLE")
+
+    early, early_gate = context_event(
+        "reason-code-early",
+        now + timedelta(minutes=10),
+        now + timedelta(minutes=20),
+    )
+    assert operations.redeem(host, session, early.id, early_gate.id, "invalid")["reason_code"] == (
+        "CHECKIN_NOT_OPEN"
+    )
+
+    closed, closed_gate = context_event(
+        "reason-code-closed",
+        now - timedelta(minutes=20),
+        now - timedelta(minutes=10),
+    )
+    assert operations.redeem(host, session, closed.id, closed_gate.id, "invalid")[
+        "reason_code"
+    ] == ("CHECKIN_CLOSED")

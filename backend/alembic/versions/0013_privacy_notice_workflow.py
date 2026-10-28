@@ -75,7 +75,8 @@ def upgrade() -> None:
         "ON registration_notice_versions TO eventcheckin_platform"
     )
     op.execute(
-        "GRANT INSERT, SELECT (id, occurred_at) ON security_audit_events TO eventcheckin_runtime"
+        "GRANT INSERT (actor_user_id, tenant_id, action, metadata), "
+        "SELECT (id, occurred_at) ON security_audit_events TO eventcheckin_runtime"
     )
     op.execute("""CREATE POLICY platform_notice_control ON registration_notice_versions
       TO eventcheckin_platform
@@ -117,7 +118,8 @@ def downgrade() -> None:
     op.drop_column("participant_imports", "authorization_confirmed_at")
     op.execute("DROP POLICY platform_notice_control ON registration_notice_versions")
     op.execute(
-        "REVOKE INSERT, SELECT (id, occurred_at) ON security_audit_events FROM eventcheckin_runtime"
+        "REVOKE INSERT (actor_user_id, tenant_id, action, metadata), "
+        "SELECT (id, occurred_at) ON security_audit_events FROM eventcheckin_runtime"
     )
     op.execute(
         "REVOKE SELECT, INSERT, UPDATE (approved_at, approved_by, approval_reference, active) "

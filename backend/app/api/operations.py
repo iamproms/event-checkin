@@ -1,8 +1,9 @@
 """Event-critical participant import, attendance, export and gate APIs."""
 
+from datetime import datetime
 from email.parser import BytesParser
 from email.policy import default
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -33,6 +34,22 @@ class RedeemBody(StrictBody):
     event_id: UUID
     gate_id: UUID
     credential: str = Field(min_length=20, max_length=512)
+
+
+class RedeemResponse(BaseModel):
+    outcome: Literal["accepted", "duplicate", "revoked", "invalid"]
+    reason_code: Literal[
+        "ACCEPTED",
+        "DUPLICATE_ADMISSION",
+        "REVOKED_TICKET",
+        "INVALID_TICKET",
+        "EVENT_UNAVAILABLE",
+        "GATE_UNAVAILABLE",
+        "CHECKIN_NOT_OPEN",
+        "CHECKIN_CLOSED",
+        "CHECKIN_WINDOW_UNAVAILABLE",
+    ]
+    confirmed_at: datetime
 
 
 def service(request: Request) -> EventOperationsService:
@@ -210,11 +227,11 @@ def gate_session(request: Request, operations: Service) -> dict[str, object]:
         raise denied(exc) from exc
 
 
-@gate_router.post("/redeem", dependencies=[Depends(csrf)])
-def redeem(body: RedeemBody, request: Request, operations: Service) -> dict[str, object]:
+@gate_router.post("/redeem", dependencies=[Depends(csrf)], response_model=RedeemResponse)
+def redeem(body: RedeemBody, request: Request, operations: Service) -> RedeemResponse:
     try:
-        return operations.redeem(
-            *credentials(request), body.event_id, body.gate_id, body.credential
+        return RedeemResponse.model_validate(
+            operations.redeem(*credentials(request), body.event_id, body.gate_id, body.credential)
         )
     except (AuthDenied, Forbidden, OperationDenied) as exc:
         raise denied(exc) from exc

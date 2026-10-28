@@ -3,6 +3,7 @@
 import csv
 import hashlib
 import io
+import logging
 import os
 import zipfile
 from datetime import UTC, datetime
@@ -46,10 +47,23 @@ from app.worker.jobs import enqueue_job
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
 MAX_IMPORT_ROWS = 10_000
 IMPORT_CHUNK_ROWS = 200
+logger = logging.getLogger(__name__)
 
 
 class OperationDenied(ValueError):
     pass
+
+
+def _redemption_result(outcome: str, reason_code: str, confirmed_at: datetime) -> dict[str, object]:
+    logger.info(
+        "gate_redemption",
+        extra={"outcome": outcome, "reason_code": reason_code},
+    )
+    return {
+        "outcome": outcome,
+        "reason_code": reason_code,
+        "confirmed_at": confirmed_at.isoformat(),
+    }
 
 
 def _csv_rows(content: bytes) -> tuple[list[str], list[dict[str, str]]]:
@@ -858,16 +872,19 @@ class EventOperationsService:
         with authorized_tenant_session(self.engine, tenant) as db:
             event = db.scalar(select(Event).where(Event.id == event_id))
             gate = db.scalar(select(Gate).where(Gate.id == gate_id, Gate.event_id == event_id))
-            if (
-                event is None
-                or event.status != "published"
-                or gate is None
-                or gate.status != "active"
-                or event.checkin_opens_at is None
-                or event.checkin_closes_at is None
-                or not (event.checkin_opens_at <= now < event.checkin_closes_at)
-            ):
-                raise OperationDenied("Check-in is unavailable")
+            # Contextual rejection is a server-confirmed non-admission, not an
+            # ambiguous transport error. Keep the legacy `invalid` outcome for
+            # clients that do not yet understand reason_code.
+            if event is None or event.status != "published":
+                return _redemption_result("invalid", "EVENT_UNAVAILABLE", now)
+            if gate is None or gate.status != "active":
+                return _redemption_result("invalid", "GATE_UNAVAILABLE", now)
+            if event.checkin_opens_at is None or event.checkin_closes_at is None:
+                return _redemption_result("invalid", "CHECKIN_WINDOW_UNAVAILABLE", now)
+            if now < event.checkin_opens_at:
+                return _redemption_result("invalid", "CHECKIN_NOT_OPEN", now)
+            if now >= event.checkin_closes_at:
+                return _redemption_result("invalid", "CHECKIN_CLOSED", now)
             ticket = None
             if digest is not None and version is not None:
                 ticket = db.scalar(
@@ -880,10 +897,16 @@ class EventOperationsService:
                     .with_for_update()
                 )
             outcome = "invalid"
+            reason_code = "INVALID_TICKET"
             if ticket is not None:
                 outcome = {"active": "accepted", "used": "duplicate", "revoked": "revoked"}[
                     ticket.status
                 ]
+                reason_code = {
+                    "accepted": "ACCEPTED",
+                    "duplicate": "DUPLICATE_ADMISSION",
+                    "revoked": "REVOKED_TICKET",
+                }[outcome]
                 if outcome == "accepted":
                     registration = db.scalar(
                         select(Registration).where(
@@ -897,6 +920,7 @@ class EventOperationsService:
                         or registration.status != "registered"
                     ):
                         outcome = "invalid"
+                        reason_code = "INVALID_TICKET"
                     else:
                         ticket.status = "used"
                         ticket.redeemed_at = now
@@ -914,7 +938,7 @@ class EventOperationsService:
                     occurred_at=now,
                 )
             )
-            return {"outcome": outcome, "confirmed_at": now.isoformat()}
+            return _redemption_result(outcome, reason_code, now)
 
     def attendance(self, host: str, token: str, event_id: UUID) -> dict[str, object]:
         tenant, _ = self._scope(host, token, "report.view", event_id)

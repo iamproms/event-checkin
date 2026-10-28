@@ -16,15 +16,17 @@ async function mockOrganizer(page: Page) {
   } }));
 }
 
-test('platform console distinguishes connected provisioning from unavailable directories and privacy controls', async ({ page }) => {
+test('platform console protects connected organization and privacy controls', async ({ page }) => {
   await page.route('**/api/v1/platform/auth/session', route => route.fulfill({ status: 401, json: {} }));
+  await page.route('**/api/v1/platform/organizations?*', route => route.fulfill({ status: 401, json: { detail: { code: 'AUTH_REQUIRED' } } }));
   await page.goto('/platform-console.html#organizations');
   await expect(page.getByRole('heading', { name: 'Platform administrator access required' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Organization directory is unavailable' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Existing organizations' })).toHaveCount(0);
   await page.getByRole('link', { name: 'Privacy' }).click();
   await expect(page.getByRole('heading', { name: 'Privacy notices', level: 1 })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Privacy notice management is unavailable' })).toBeVisible();
-  await expect(page.getByText('No policy state is inferred in this console.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Choose organization' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('session is no longer authorized');
+  await expect(page.getByText('Privacy notice management is unavailable')).toHaveCount(0);
 });
 
 test('incomplete invitation and reset links never submit credentials', async ({ page }) => {
@@ -54,11 +56,22 @@ test('scanner presents only server-confirmed structured outcomes', async ({ page
   await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
   await page.route('**/api/v1/gate/redeem', async route => {
     const credential = String(route.request().postDataJSON().credential);
-    const outcome = credential as 'duplicate' | 'revoked' | 'invalid';
-    await route.fulfill({ json: { outcome, confirmed_at: '2026-11-01T09:10:00Z' } });
+    const responses = {
+      duplicate: ['duplicate', 'DUPLICATE_ADMISSION'], revoked: ['revoked', 'REVOKED_TICKET'],
+      invalid: ['invalid', 'INVALID_TICKET'], event: ['invalid', 'EVENT_UNAVAILABLE'],
+      gate: ['invalid', 'GATE_UNAVAILABLE'], early: ['invalid', 'CHECKIN_NOT_OPEN'],
+      closed: ['invalid', 'CHECKIN_CLOSED'], window: ['invalid', 'CHECKIN_WINDOW_UNAVAILABLE'],
+    } as const;
+    const [outcome, reason_code] = responses[credential as keyof typeof responses];
+    await route.fulfill({ json: { outcome, reason_code, confirmed_at: '2026-11-01T09:10:00Z' } });
   });
   await page.goto('/gate.html');
-  for (const [credential, heading] of [['duplicate', 'Already checked in'], ['revoked', 'Ticket revoked'], ['invalid', 'Ticket not accepted']] as const) {
+  for (const [credential, heading] of [
+    ['duplicate', 'Already checked in'], ['revoked', 'Ticket revoked'],
+    ['invalid', 'Ticket not accepted'], ['event', 'Event unavailable'],
+    ['gate', 'Gate unavailable'], ['early', 'Check-in has not opened'],
+    ['closed', 'Check-in is closed'], ['window', 'Check-in window unavailable'],
+  ] as const) {
     await page.getByLabel('Secure manual credential').fill(credential);
     await page.getByRole('button', { name: 'Verify with server' }).click();
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
@@ -113,9 +126,13 @@ test('capture Phase 4 supporting interfaces at desktop, tablet, and mobile width
   await page.route('**/api/v1/platform/auth/session', route => route.fulfill({ json: {
     email: 'platform@example.test', permission: 'tenant.provision',
   } }));
+  await page.route('**/api/v1/platform/organizations?*', route => route.fulfill({ json: {
+    organizations: [], total: 0, limit: 25, offset: 0, has_more: false,
+  } }));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/platform-console.html#organizations');
   await expect(page.getByRole('heading', { name: 'Create organization' })).toBeVisible();
+  await expect(page.getByText('No organizations found')).toBeVisible();
   const platformShot = `${screenshotDir}/phase4-platform-organizations-desktop.png`;
   await page.screenshot({ path: platformShot, fullPage: true, animations: 'disabled' });
   await testInfo.attach('phase4-platform-organizations-desktop', { path: platformShot, contentType: 'image/png' });
@@ -143,7 +160,7 @@ test('capture Phase 4 supporting interfaces at desktop, tablet, and mobile width
   } }));
   await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
   await page.route('**/api/v1/gate/redeem', route => route.fulfill({ json: {
-    outcome: 'invalid', confirmed_at: '2026-11-01T09:10:00Z',
+    outcome: 'invalid', reason_code: 'INVALID_TICKET', confirmed_at: '2026-11-01T09:10:00Z',
   } }));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/gate.html');

@@ -44,6 +44,9 @@ export type Gate = { id: string; event_id: string; name: string; enabled: boolea
 
 export type RedemptionResult = {
   outcome: 'accepted' | 'duplicate' | 'revoked' | 'invalid';
+  reason_code: 'ACCEPTED' | 'DUPLICATE_ADMISSION' | 'REVOKED_TICKET' | 'INVALID_TICKET' |
+    'EVENT_UNAVAILABLE' | 'GATE_UNAVAILABLE' | 'CHECKIN_NOT_OPEN' | 'CHECKIN_CLOSED' |
+    'CHECKIN_WINDOW_UNAVAILABLE';
   confirmed_at: string;
 };
 

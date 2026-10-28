@@ -79,8 +79,19 @@ function GateApp() {
   }
   function reset() { setResult(null); setRetryCredential(''); setError(''); setState('ready'); }
   const tone = result?.outcome === 'accepted' ? 'success' : result?.outcome === 'duplicate' ? 'warning' : 'danger';
-  const title = result?.outcome === 'accepted' ? 'Admission confirmed' : result?.outcome === 'duplicate' ? 'Already checked in' : result?.outcome === 'revoked' ? 'Ticket revoked' : 'Ticket not accepted';
-  const resultDescription = result?.outcome === 'accepted' ? 'The server recorded one admission for this ticket.' : result?.outcome === 'duplicate' ? 'The server recorded an earlier admission. Do not admit again.' : result?.outcome === 'revoked' ? 'The server confirmed this credential is revoked. Do not admit.' : 'The server returned an invalid result. No admission was recorded; a more specific rejection reason is unavailable.';
+  const reason = result?.reason_code || (result?.outcome === 'accepted' ? 'ACCEPTED' : result?.outcome === 'duplicate' ? 'DUPLICATE_ADMISSION' : result?.outcome === 'revoked' ? 'REVOKED_TICKET' : 'INVALID_TICKET');
+  const resultCopy: Record<RedemptionResult['reason_code'], { title: string; description: string }> = {
+    ACCEPTED: { title: 'Admission confirmed', description: 'The server recorded one admission for this ticket.' },
+    DUPLICATE_ADMISSION: { title: 'Already checked in', description: 'The server recorded an earlier admission. Do not admit again.' },
+    REVOKED_TICKET: { title: 'Ticket revoked', description: 'The server confirmed this credential is revoked. Do not admit.' },
+    INVALID_TICKET: { title: 'Ticket not accepted', description: 'The server could not validate this ticket. No admission was recorded.' },
+    EVENT_UNAVAILABLE: { title: 'Event unavailable', description: 'This event is not available for admission. Ask an organizer to verify its published state.' },
+    GATE_UNAVAILABLE: { title: 'Gate unavailable', description: 'This gate is not active for the selected event. Ask a supervisor to verify the assignment.' },
+    CHECKIN_NOT_OPEN: { title: 'Check-in has not opened', description: 'The configured check-in window has not started. Do not admit yet.' },
+    CHECKIN_CLOSED: { title: 'Check-in is closed', description: 'The configured check-in window has ended. Ask a supervisor for assistance.' },
+    CHECKIN_WINDOW_UNAVAILABLE: { title: 'Check-in window unavailable', description: 'No complete check-in window is configured. Ask an organizer to correct the event.' },
+  };
+  const { title, description: resultDescription } = resultCopy[reason] ?? resultCopy.INVALID_TICKET;
   const eventAvailable = !active?.event_status || active.event_status === 'published';
 
   return <main className="gate-app">

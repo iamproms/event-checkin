@@ -185,7 +185,7 @@ test('platform organization directory reports errors and recovers to an empty st
       : { json: { organizations: [], total: 0, limit: 25, offset: 0, has_more: false } });
   });
   await page.goto('/platform-console.html#organizations');
-  await expect(page.getByRole('alert').filter({ hasText: 'Directory temporarily unavailable' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'The service is temporarily unavailable' })).toBeVisible();
   requests = 2;
   await page.getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByText('No organizations found')).toBeVisible();
@@ -278,7 +278,7 @@ test('gate experience shows admission only after server-confirmed redemption', a
   await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
   await page.route('**/api/v1/gate/redeem', async route => {
     expect((await route.request().postDataJSON()).credential).toBe('secure-test-credential');
-    await route.fulfill({ json: { outcome: 'accepted', confirmed_at: '2026-11-01T09:10:00Z', gate_name: 'Main hall', message: 'Admission recorded.' } });
+    await route.fulfill({ json: { outcome: 'accepted', reason_code: 'ACCEPTED', confirmed_at: '2026-11-01T09:10:00Z' } });
   });
   await page.goto('/gate.html');
   await expect(page.getByRole('heading', { name: 'Ready to scan' })).toBeVisible();
@@ -296,7 +296,7 @@ test('gate session shows a useful error when the server returns non-JSON', async
   await page.goto('/gate.html');
   await expect(page.getByRole('heading', { name: 'Gate access required' })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveText(
-    'Request failed (HTTP 500). Try again or contact support.',
+    'The service is temporarily unavailable. Try again shortly.',
   );
   await expect(page.getByText('Unexpected token')).toHaveCount(0);
 });
@@ -365,7 +365,7 @@ test('bulk import explains missing approval and surfaces API validation errors',
   await page.getByRole('button', { name: 'Choose another file' }).click();
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/only-email.csv');
   await page.getByRole('button', { name: 'Validate rows' }).click();
-  await expect(page.getByRole('alert').getByText('mapping.email: Email column is invalid')).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('Some information could not be accepted');
 });
 
 test('bulk import requires an unchecked authorization before commit', async ({ page }) => {

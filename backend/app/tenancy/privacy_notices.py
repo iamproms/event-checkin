@@ -23,7 +23,10 @@ def _view(row: RegistrationNoticeVersion) -> dict[str, object]:
         "body": row.body,
         "lawful_basis": row.lawful_basis,
         "test_only": row.test_only,
+        "created_at": row.created_at.isoformat(),
+        "created_by": str(row.created_by) if row.created_by else None,
         "approved_at": row.approved_at.isoformat() if row.approved_at else None,
+        "approved_by": str(row.approved_by) if row.approved_by else None,
         "approval_reference": row.approval_reference,
         "active": row.active,
     }

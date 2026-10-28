@@ -1,5 +1,6 @@
 """M2-01 platform host routes; no tenant data access is exposed."""
 
+from datetime import datetime
 from typing import Annotated, cast
 from uuid import UUID
 
@@ -93,6 +94,42 @@ class NoticeApprovalBody(BaseModel):
 class NoticeActivationBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmed: StrictBool
+
+
+class OrganizationResponse(BaseModel):
+    id: UUID
+    name: str
+    status: str
+    created_at: datetime
+    primary_organizer: str | None
+    invitation_delivery_status: str | None
+
+
+class OrganizationPageResponse(BaseModel):
+    organizations: list[OrganizationResponse]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    offset: int = Field(ge=0)
+    has_more: bool
+
+
+class PrivacyNoticeResponse(BaseModel):
+    version: int = Field(ge=1)
+    body: str
+    lawful_basis: str
+    test_only: bool
+    created_at: datetime
+    created_by: UUID | None
+    approved_at: datetime | None
+    approved_by: UUID | None
+    approval_reference: str | None
+    active: bool
+
+
+class PrivacyNoticeListResponse(BaseModel):
+    organization_id: UUID
+    organization_name: str
+    notices: list[PrivacyNoticeResponse]
 
 
 def notice_failure(exc: Exception) -> HTTPException:
@@ -207,7 +244,7 @@ def actor(request: Request, auth: PlatformAuth) -> UUID:
     return auth.current(request.cookies.get(PLATFORM_SESSION_COOKIE, "")).id
 
 
-@router.get("/organizations")
+@router.get("/organizations", response_model=OrganizationPageResponse)
 def list_organizations(
     request: Request,
     auth: Auth,
@@ -215,19 +252,21 @@ def list_organizations(
     q: str = Query(default="", max_length=100),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0, le=100_000),
-) -> dict[str, object]:
+) -> OrganizationPageResponse:
     try:
-        return PlatformOrganizations(service.control_engine).list(
-            actor(request, auth), query=q, limit=limit, offset=offset
+        return OrganizationPageResponse.model_validate(
+            PlatformOrganizations(service.control_engine).list(
+                actor(request, auth), query=q, limit=limit, offset=offset
+            )
         )
     except (AuthDenied, DomainDenied) as exc:
         raise notice_failure(exc) from exc
 
 
-@router.get("/organizations/{tenant_id}")
+@router.get("/organizations/{tenant_id}", response_model=OrganizationResponse)
 def get_organization(
     tenant_id: UUID, request: Request, auth: Auth, service: Domains
-) -> dict[str, object]:
+) -> OrganizationResponse:
     try:
         organization = PlatformOrganizations(service.control_engine).get(
             actor(request, auth), tenant_id
@@ -238,35 +277,47 @@ def get_organization(
         raise HTTPException(
             404, detail={"code": "ORGANIZATION_NOT_FOUND", "message": "Organization unavailable"}
         )
-    return organization
+    return OrganizationResponse.model_validate(organization)
 
 
-@router.get("/organizations/{tenant_id}/privacy-notices")
+@router.get(
+    "/organizations/{tenant_id}/privacy-notices",
+    response_model=PrivacyNoticeListResponse,
+)
 def list_privacy_notices(
     tenant_id: UUID, request: Request, auth: Auth, service: Domains
-) -> dict[str, object]:
+) -> PrivacyNoticeListResponse:
     try:
-        return notice_service(request, service).list(actor(request, auth), tenant_id)
-    except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
-        raise notice_failure(exc) from exc
-
-
-@router.post(
-    "/organizations/{tenant_id}/privacy-notices", status_code=201, dependencies=[Depends(csrf)]
-)
-def draft_privacy_notice(
-    tenant_id: UUID, body: NoticeDraftBody, request: Request, auth: Auth, service: Domains
-) -> dict[str, object]:
-    try:
-        return notice_service(request, service).draft(
-            actor(request, auth), tenant_id, body.body, body.lawful_basis, body.test_only
+        return PrivacyNoticeListResponse.model_validate(
+            notice_service(request, service).list(actor(request, auth), tenant_id)
         )
     except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
         raise notice_failure(exc) from exc
 
 
 @router.post(
-    "/organizations/{tenant_id}/privacy-notices/{version}/approve", dependencies=[Depends(csrf)]
+    "/organizations/{tenant_id}/privacy-notices",
+    status_code=201,
+    dependencies=[Depends(csrf)],
+    response_model=PrivacyNoticeResponse,
+)
+def draft_privacy_notice(
+    tenant_id: UUID, body: NoticeDraftBody, request: Request, auth: Auth, service: Domains
+) -> PrivacyNoticeResponse:
+    try:
+        return PrivacyNoticeResponse.model_validate(
+            notice_service(request, service).draft(
+                actor(request, auth), tenant_id, body.body, body.lawful_basis, body.test_only
+            )
+        )
+    except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
+        raise notice_failure(exc) from exc
+
+
+@router.post(
+    "/organizations/{tenant_id}/privacy-notices/{version}/approve",
+    dependencies=[Depends(csrf)],
+    response_model=PrivacyNoticeResponse,
 )
 def approve_privacy_notice(
     tenant_id: UUID,
@@ -275,7 +326,7 @@ def approve_privacy_notice(
     request: Request,
     auth: Auth,
     service: Domains,
-) -> dict[str, object]:
+) -> PrivacyNoticeResponse:
     if not body.confirmed:
         raise HTTPException(
             422,
@@ -285,15 +336,19 @@ def approve_privacy_notice(
             },
         )
     try:
-        return notice_service(request, service).approve(
-            actor(request, auth), tenant_id, version, body.approval_reference
+        return PrivacyNoticeResponse.model_validate(
+            notice_service(request, service).approve(
+                actor(request, auth), tenant_id, version, body.approval_reference
+            )
         )
     except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
         raise notice_failure(exc) from exc
 
 
 @router.post(
-    "/organizations/{tenant_id}/privacy-notices/{version}/activate", dependencies=[Depends(csrf)]
+    "/organizations/{tenant_id}/privacy-notices/{version}/activate",
+    dependencies=[Depends(csrf)],
+    response_model=PrivacyNoticeResponse,
 )
 def activate_privacy_notice(
     tenant_id: UUID,
@@ -302,7 +357,7 @@ def activate_privacy_notice(
     request: Request,
     auth: Auth,
     service: Domains,
-) -> dict[str, object]:
+) -> PrivacyNoticeResponse:
     if not body.confirmed:
         raise HTTPException(
             422,
@@ -312,7 +367,9 @@ def activate_privacy_notice(
             },
         )
     try:
-        return notice_service(request, service).activate(actor(request, auth), tenant_id, version)
+        return PrivacyNoticeResponse.model_validate(
+            notice_service(request, service).activate(actor(request, auth), tenant_id, version)
+        )
     except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
         raise notice_failure(exc) from exc
 

@@ -8,7 +8,10 @@ type Notice = {
   body: string;
   lawful_basis: string;
   test_only: boolean;
+  created_at: string;
+  created_by: string | null;
   approved_at: string | null;
+  approved_by: string | null;
   approval_reference: string | null;
   active: boolean;
 };
@@ -116,6 +119,8 @@ export function PrivacyNotices() {
       {loaded.notices.length ? loaded.notices.map(item => <article className="notice-record" key={item.version}>
         <h3>Version {item.version} <StatusMark tone={item.active ? 'success' : item.approved_at ? 'neutral' : 'warning'}>{item.active ? 'Active' : item.approved_at ? 'Approved' : 'Draft'}</StatusMark></h3>
         <p className="notice-body">{item.body}</p><p><strong>Recorded basis:</strong> {item.lawful_basis}</p>
+        <p><strong>Created:</strong> {new Date(item.created_at).toLocaleString()} · <strong>Actor:</strong> <code>{item.created_by || 'Legacy record'}</code></p>
+        {item.approved_at && <p><strong>Approved:</strong> {new Date(item.approved_at).toLocaleString()} · <strong>Actor:</strong> <code>{item.approved_by || 'Legacy record'}</code></p>}
         {item.test_only && <p>Test-only notice. Activation is restricted to local and test environments.</p>}
         {item.approval_reference && <p><strong>Approval reference:</strong> {item.approval_reference}</p>}
         {!item.approved_at && <div className="form-grid"><label>External approval reference for version {item.version}<input value={approvalReference[item.version] || ''} maxLength={500} onChange={event => setApprovalReference(current => ({...current, [item.version]: event.target.value}))}/></label><label className="import-authorization"><input type="checkbox" checked={approvalConfirmed === item.version} onChange={event => setApprovalConfirmed(event.target.checked ? item.version : null)}/><span>I confirm this exact notice and basis received the required external approval.</span></label><button className="product-button" disabled={busy || approvalConfirmed !== item.version || !approvalReference[item.version]?.trim()} onClick={() => void act(item.version, 'approve')}>Record approval</button></div>}
