@@ -1,7 +1,7 @@
 # UI/UX Implementation Plan
 
 **Branch:** `feat/platform-ui-ux-overhaul`  
-**Status:** Phase 2 and Phase 3 implemented; Phase 4 requires separate approval
+**Status:** Phases 2–4 implemented; Phase 4 complete for review and Phase 5 remains pending
 **Constraint:** Frontend-only changes unless a separate backend change receives explicit approval.
 
 ## Design direction: Quiet Operations
@@ -154,6 +154,8 @@ This keeps URLs shareable and refresh safe without adding a routing dependency o
 
 ## Phase 4: supporting interfaces
 
+**Completion status:** Implemented on 2026-10-28. The platform, authentication, scanner, reports, branding, domains, settings, registration, and active legacy surfaces now use the Quiet Operations system without changing backend contracts.
+
 ### Platform administration and organization management
 
 - Remove synthetic totals and charts.
@@ -188,6 +190,8 @@ This keeps URLs shareable and refresh safe without adding a routing dependency o
 - Test authentication, recovery, platform provisioning, branding, domain, registration, and scanner flows.
 - Inspect auth desktop and mobile, platform desktop and mobile, scanner mobile, and public registration.
 - Verify light and dark themes, keyboard order, focus restoration, and reduced motion.
+
+Completed Phase 4 evidence includes 49 passing Playwright tests across all eight spec files, automated WCAG 2.2 AA checks at 320 px, route-level keyboard and reduced-motion coverage, and inspected desktop, tablet, and mobile captures under `docs/screenshots/phase4-*.png`. TypeScript, ESLint, the production build, both token tests, and the Taste source linter also pass. The Taste linter retains eight advisory warnings and no failures.
 
 ### Proposed focused commits
 

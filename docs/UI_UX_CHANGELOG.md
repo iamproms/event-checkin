@@ -133,13 +133,76 @@ This file records the work completed on `feat/platform-ui-ux-overhaul`. Entries 
 
 ### Approval boundary
 
-- Phase 3 is complete for review. Phase 4 supporting interfaces have not begun.
+- Phase 3 is complete for review. Phase 4 proceeded under the subsequent continuation approval.
+
+## 2026-10-28: Phase 4 supporting interfaces
+
+### Platform administration
+
+- Added a dedicated privacy-notice route and an explicit backend-required state instead of implying editable policy data.
+- Reworked organization provisioning around the shared fields, buttons, loading skeleton, success state, and safe operation feedback.
+- Kept the connected organization-creation and invitation-resend workflow while clearly separating the unavailable organization directory and detail APIs.
+- Added signed-in permission context and restricted-access guidance without inventing organization counts or cross-tenant records.
+- Preserved the live readiness overview and removed the remaining synthetic-platform framing from supporting routes.
+
+### Authentication and onboarding
+
+- Applied the shared password visibility control to the active legacy platform sign-in.
+- Added incomplete invitation and password-reset link handling that never presents a credential submission form without its token.
+- Added stronger new-password guidance and six-digit MFA input constraints while preserving all authentication endpoints and security behavior.
+- Kept lockout copy honest when the backend supplies no precise retry time and cleared authenticator input when changing verification modes.
+- Preserved loading, disabled, validation, recovery, MFA enrollment, session-expiry, and completion messaging.
+
+### Gate scanner
+
+- Added distinct camera permission, missing-device, unsupported-browser, insecure-context, offline, and unpublished-event feedback.
+- Refined accepted, duplicate, revoked, invalid, and network-unconfirmed outcomes so only a server-confirmed accepted result permits admission.
+- Renamed the unstructured invalid outcome to “Ticket not accepted” and explicitly avoids inferring a rejection reason the API did not return.
+- Kept the mobile operational composition readable at 320 px and retained reduced-motion behavior for active scanning feedback.
+
+### Reports, branding, settings, and legacy workflows
+
+- Kept attendance CSV as the connected report and labeled unimplemented report formats as Coming soon.
+- Replaced sample organization branding and fallback domain values with explicit unavailable or restricted states.
+- Added shared navigation and operation feedback to the active branding and domain management pages.
+- Added honest unavailable states for profile editing and self-service privacy operations.
+- Routed public registration and supporting-management failures through safe user messages instead of raw API detail.
+- Preserved active routes, working controls, request payloads, and backend contracts.
+
+### Interaction-state coverage
+
+- Added focused coverage for restricted platform provisioning, unavailable organization and privacy data, incomplete authentication links, password visibility, scanner rejection outcomes, and connected-versus-unavailable reporting and settings states.
+- Verified loading, empty, error, success, restricted, disabled, Coming soon, and asynchronous operation feedback through existing and Phase 4 deterministic fixtures.
+- Added route-level focus restoration and reduced-motion verification for the supporting-interface drawer.
+
+### Verification
+
+- TypeScript: passed.
+- ESLint: passed.
+- Production build: passed, 79 modules transformed.
+- Token tests: passed, 2 tests.
+- Playwright: passed, 49 tests across all eight spec files in one final-tree run.
+- Phase 4 focused Playwright suite: passed, 8 tests.
+- Automated WCAG 2.2 AA checks passed across representative supporting screens at 320 px.
+- Taste source linter: 0 failures and 8 advisory warnings. The categories remain four intentional functional shadows, two technical monospace uses, one existing public-registration eyebrow, and one aggregate em-dash copy warning.
+- Keyboard focus restoration and reduced-motion drawer behavior passed at the route level.
+- Inspected a 1440 px platform provisioning view, 768 px attendance reports view, 320 px authentication view, and 390 px server-rejected scanner result. No clipping, overlap, or unintended horizontal overflow was observed.
+- Added `phase4-platform-organizations-desktop.png`, `phase4-reports-tablet.png`, `phase4-auth-mobile-320.png`, and `phase4-gate-invalid-mobile.png` under `docs/screenshots/`.
+- Refreshed `platform-desktop-dark.png`; `platform-desktop-dark-before.png` remains the relevant comparison showing the removed synthetic totals and chart.
+
+### Phase 4 boundary
+
+- Phase 4 is complete for review. No merge or push was performed.
+- Cross-browser and expanded manual assistive-technology verification remain recommended Phase 5 work.
 
 ## Backend dependencies
 
 - Structured authentication lockout reason and retry metadata.
 - Structured scanner rejection and event-window reason codes.
+- Authorized platform organization directory and organization-detail APIs.
+- Platform privacy-notice read, version, publish, and history APIs.
 - Authoritative platform aggregate and operations telemetry APIs.
 - Report formats beyond the existing CSV export.
 - Communications and subscription service contracts.
 - Background job status detail for precise bulk-operation progress.
+- Organization profile editing and self-service privacy-operation contracts.
