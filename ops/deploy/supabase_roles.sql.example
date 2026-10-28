@@ -1,0 +1,40 @@
+-- Run as the Supabase migration owner after replacing psql variables with
+-- independently generated secrets supplied through the operator environment.
+-- Never commit a populated copy.
+\set ON_ERROR_STOP on
+
+CREATE ROLE eventcheckin_app_prod LOGIN PASSWORD :'runtime_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_identity_app_prod LOGIN PASSWORD :'identity_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_platform_app_prod LOGIN PASSWORD :'platform_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_jobs_app_prod LOGIN PASSWORD :'jobs_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_dispatcher_app_prod LOGIN PASSWORD :'dispatcher_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_job_operator_app_prod LOGIN PASSWORD :'operator_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_bootstrap_app_prod LOGIN PASSWORD :'bootstrap_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_domain_worker_app_prod LOGIN PASSWORD :'domain_worker_password' NOBYPASSRLS;
+CREATE ROLE eventcheckin_domain_scheduler_app_prod LOGIN PASSWORD :'domain_scheduler_password' NOBYPASSRLS;
+
+GRANT eventcheckin_runtime TO eventcheckin_app_prod;
+GRANT eventcheckin_identity TO eventcheckin_identity_app_prod;
+GRANT eventcheckin_platform TO eventcheckin_platform_app_prod;
+GRANT eventcheckin_jobs TO eventcheckin_jobs_app_prod;
+GRANT eventcheckin_dispatcher TO eventcheckin_dispatcher_app_prod;
+GRANT eventcheckin_job_operator TO eventcheckin_job_operator_app_prod;
+GRANT eventcheckin_bootstrap TO eventcheckin_bootstrap_app_prod;
+GRANT eventcheckin_domain_worker TO eventcheckin_domain_worker_app_prod;
+GRANT eventcheckin_domain_scheduler TO eventcheckin_domain_scheduler_app_prod;
+
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_identity_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_platform_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_jobs_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_dispatcher_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_job_operator_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_bootstrap_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_domain_worker_app_prod;
+GRANT CONNECT ON DATABASE :"database_name" TO eventcheckin_domain_scheduler_app_prod;
+
+ALTER ROLE eventcheckin_app_prod SET statement_timeout = '15s';
+ALTER ROLE eventcheckin_identity_app_prod SET statement_timeout = '15s';
+ALTER ROLE eventcheckin_platform_app_prod SET statement_timeout = '15s';
+ALTER ROLE eventcheckin_jobs_app_prod SET statement_timeout = '120s';
+ALTER ROLE eventcheckin_dispatcher_app_prod SET statement_timeout = '15s';

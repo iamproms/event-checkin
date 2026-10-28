@@ -1,0 +1,21 @@
+FROM python:3.13-slim AS api
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=10000
+RUN useradd --system --uid 10001 --create-home appuser
+COPY backend/pyproject.toml ./
+COPY backend/requirements.lock ./
+COPY backend/app ./app
+COPY backend/alembic.ini ./
+COPY backend/alembic ./alembic
+RUN pip install --no-cache-dir --constraint requirements.lock .
+
+FROM caddy:2.10.2-alpine AS caddy
+
+FROM api
+COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+COPY ops/deploy/Caddyfile.api /etc/caddy/Caddyfile
+COPY ops/deploy/start-api.sh /usr/local/bin/start-api
+RUN chmod 0555 /usr/local/bin/start-api && chown -R appuser:appuser /app
+USER 10001
+EXPOSE 10000
+CMD ["start-api"]

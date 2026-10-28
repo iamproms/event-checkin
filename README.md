@@ -1,10 +1,10 @@
 # Event Check-in Platform
 
-## Event-first shared-host release (in progress)
+## Event-first shared-host release candidate
 
 The event-first branch adds migration `0012_shared_event_release`. The platform host has one staff sign-in and an organization form that requires only an organization name and organizer email. After account setup and MFA, organizers use the same host for their tenant-scoped workspace. Newly created events default to import-only mode; CSV files may contain only an email column. Import, QR issuance, and ticket sending are separate actions. The established custom-domain and public-registration paths remain available. Migration `0013_privacy_notice_workflow` adds platform-admin notice drafting, approval, and activation; see [privacy import workflow](docs/PRIVACY_IMPORT_WORKFLOW.md).
 
-For a local rehearsal, back up the database and apply the new migration, then run the local HTTPS services. On the existing development workstation, the private, Git-ignored helper `bash .env.local-event-smoke` performs those steps and checks migration `0012_shared_event_release`; fresh checkouts should follow [Local startup](#local-startup) and the [HTTPS host runbook](docs/M2-01_PROVISIONING_RUNBOOK.md). Open the platform hostname at `/`, create the organization in `/platform-console.html#organizations`, inspect the local Mailpit inbox, and follow the invitation. Staging and production email remain disabled until an approved transactional provider, sender, privacy notice, and deployment region are configured. See [the staging runbook](docs/EVENT_STAGING_DEPLOYMENT_RUNBOOK.md) for the release gates.
+For a local rehearsal, back up the database and apply the new migration, then run the local HTTPS services. On the existing development workstation, the private, Git-ignored helper `bash .env.local-event-smoke` performs those steps; fresh checkouts should follow [Local startup](#local-startup) and the [HTTPS host runbook](docs/M2-01_PROVISIONING_RUNBOOK.md). Open the platform hostname at `/`, create the organization in `/platform-console.html#organizations`, inspect the local Mailpit inbox, and follow the invitation. Remote delivery uses the Brevo adapter only when its restricted API key, verified sender and authenticated webhook are configured. See the [production deployment plan](docs/PRODUCTION_DEPLOYMENT_PLAN.md) and [staging runbook](docs/EVENT_STAGING_DEPLOYMENT_RUNBOOK.md) for the remaining release gates.
 
 M2-03 event configuration: see [event API contracts](docs/M2-03_EVENT_API_CONTRACTS.md) and [local runbook](docs/M2-03_EVENT_RUNBOOK.md). The event interface is at `/events.html` on an authorized tenant host. The combined provider-independent M2-04/M3-01/M3-02 foundation adds `/branding.html` and `/register.html?event={slug}`; see the [operations runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
 
@@ -14,7 +14,7 @@ M1-03 uses versioned `/api/v1/auth` routes. M1-04 adds no public job or file rou
 
 The immediate operational release path for the 1 November 2026 event is tracked
 in the [event staging deployment and rehearsal runbook](docs/EVENT_STAGING_DEPLOYMENT_RUNBOOK.md).
-It includes the prepared combined web/ingress image, environment inventory,
+It includes the Vercel frontend and authenticated Render API origin, environment inventory,
 external approval blockers, 5,000-person synthetic rehearsal, five-gate race
 criteria, backup/restore and rollback rules. The document is deployment
 preparation, not evidence that a staging or production deployment has occurred.
@@ -132,7 +132,7 @@ The isolated M1-05 component examples are at `http://127.0.0.1:5173/ui-lab.html`
 
 Run migrations as a **single release step before routing traffic to new code**. Back up first, review generated SQL and destructive operations, and rehearse on staging. Prefer a forward fix after a migration reaches production; downgrade only when explicitly reviewed as safe for existing data. The baseline and M1-02 migration can be upgraded and downgraded on an empty database; do not downgrade a populated database without a reviewed data plan.
 
-## Open M1-01 completion gates
+## Open production completion gates
 
-The M0-02 launch domain/API contracts and G-06 provider, region and privacy/vendor decisions remain open. No infrastructure as code, managed secrets integration, staging deployment, or deployment/rollback rehearsal can be finalized without a target environment. M1-04 adds local Redis and private S3-compatible storage, without selecting production providers. CI does not yet perform dependency, secret or container scanning. A backend lockfile and immutable container image references should be added before claiming repeatable releases. These items are required before M1-01 is marked complete.
+The providers are fixed for this event (GitHub, Vercel, Render, Supabase and Brevo), but regions, plans, domains, credentials, privacy/DPA approval, backup retention and an exercised restore remain external gates. No staging or production deployment has occurred. CI must still run the synchronous FastAPI contract suite outside the local sandbox, and dependency, secret and container scanning plus immutable image evidence remain required before approval. Follow the [release integration report](docs/RELEASE_INTEGRATION_REPORT.md) for the current evidence and risks.
 

@@ -1,0 +1,71 @@
+# Copy into Render only after replacing every REQUIRES_* value and creating
+# the referenced secret environment groups. No secret belongs in this file.
+services:
+  - type: web
+    runtime: docker
+    name: event-checkin-api-production
+    region: REQUIRES_APPROVED_RENDER_REGION
+    plan: 1c-2g
+    dockerfilePath: ./ops/deploy/Dockerfile.api
+    dockerContext: .
+    healthCheckPath: /ready
+    renderSubdomainPolicy: disabled
+    domains:
+      - REQUIRES_RENDER_ORIGIN_DOMAIN
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 60
+    scaling:
+      minInstances: 2
+      maxInstances: 4
+      targetCPUPercent: 60
+    envVars:
+      - fromGroup: event-checkin-api-production
+      - key: INGRESS_PROXY_IPS
+        value: 127.0.0.1
+
+  - type: worker
+    runtime: docker
+    name: event-checkin-worker-production
+    region: REQUIRES_APPROVED_RENDER_REGION
+    plan: 1c-2g
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.worker.celery_app:celery_app worker --loglevel=INFO --concurrency=4
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 120
+    numInstances: 2
+    envVars:
+      - fromGroup: event-checkin-worker-production
+
+  - type: worker
+    runtime: docker
+    name: event-checkin-dispatcher-production
+    region: REQUIRES_APPROVED_RENDER_REGION
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.worker.dispatcher
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - fromGroup: event-checkin-dispatcher-production
+
+  - type: cron
+    runtime: docker
+    name: event-checkin-job-health-production
+    region: REQUIRES_APPROVED_RENDER_REGION
+    plan: 0.5c-512mb
+    schedule: "*/5 * * * *"
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.worker.ops health
+    envVars:
+      - fromGroup: event-checkin-operations-production
+
+  - type: keyvalue
+    name: event-checkin-redis-production
+    region: REQUIRES_APPROVED_RENDER_REGION
+    plan: 1g
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot

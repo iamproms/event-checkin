@@ -1,0 +1,40 @@
+{
+	auto_https off
+	admin off
+}
+
+:{$PORT:10000} {
+	encode zstd gzip
+
+	@health path /health /ready
+	handle @health {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	@brevo path /api/v1/webhooks/brevo
+	handle @brevo {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up Host webhook.internal
+			header_up -X-Forwarded-Host
+			header_up -Forwarded
+		}
+	}
+
+	@trusted_edge header X-Eventcheckin-Origin-Auth {$ORIGIN_AUTH_SECRET}
+	handle @trusted_edge {
+		vars public_host {http.request.header.X-Eventcheckin-Public-Host}
+		vars client_ip {http.request.header.X-Eventcheckin-Client-IP}
+		reverse_proxy 127.0.0.1:8000 {
+			header_up Host {vars.public_host}
+			header_up X-Forwarded-For {vars.client_ip}
+			header_up -X-Forwarded-Host
+			header_up -Forwarded
+			header_up -X-Eventcheckin-Origin-Auth
+			header_up -X-Eventcheckin-Public-Host
+			header_up -X-Eventcheckin-Client-IP
+		}
+	}
+
+	respond 404
+	header -Server
+}
