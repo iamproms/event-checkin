@@ -68,14 +68,14 @@ def test_five_thousand_email_only_rows_import_then_queue_ticket_issuance(pg: Har
     import_id = UUID(str(preview["import_id"]))
     mapping = {"email": "email"}
     validated = operations.validate_import(
-        host, session, event_id, import_id, mapping, 1, "test-basis"
+        host, session, event_id, import_id, mapping
     )
     assert (validated["valid_count"], validated["invalid_count"], validated["duplicate_count"]) == (
         5000,
         0,
         0,
     )
-    operations.commit_import(host, session, event_id, import_id, mapping, 1, "test-basis")
+    operations.commit_import(host, session, event_id, import_id, True)
     processed_chunks = 0
     while True:
         with Session(pg.owner) as owner_db:

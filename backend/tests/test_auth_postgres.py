@@ -13,18 +13,23 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 from psycopg import sql
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import DBAPIError, ProgrammingError
 from test_tenant_postgres import _migrate
 
+from app.api.operations import gate_router
 from app.auth.corpus import CompromisedPasswordCorpus
 from app.auth.email import DisabledEmailDelivery
 from app.auth.security import hash_password, new_token, token_digest, totp_code
 from app.auth.service import AuthDenied, AuthService
 from app.core.config import Settings
 from app.db.session import authorized_tenant_session
+from app.operations.service import EventOperationsService
+from app.tenancy.authority import canonical_authority
 
 pytestmark = pytest.mark.postgres
 
@@ -75,7 +80,7 @@ def auth_db() -> Iterator[AuthDatabase]:
         with owner.connect() as conn:
             assert (
                 conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0012_shared_event_release"
+                == "0013_privacy_notice_workflow"
             )
             for table in ("staff_invitations", "event_assignments"):
                 state = conn.execute(
@@ -451,6 +456,88 @@ def _restore_scanner(db: AuthDatabase) -> None:
             ),
             {"tenant": db.tenant_a, "user": db.user},
         )
+
+
+def test_accepted_gate_invitation_opens_real_gate_session(
+    auth_db: AuthDatabase, tmp_path: Path
+) -> None:
+    email = CapturedEmail()
+    auth = AuthService(auth_db.identity, auth_db.settings, _corpus(tmp_path), email)
+    admin_session = _admin_session(auth_db)
+    event_id, gate_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    try:
+        with auth_db.owner.begin() as db:
+            db.execute(
+                text("""INSERT INTO events
+                  (id,tenant_id,slug,name,starts_at,ends_at,timezone,status,pii_purge_due_at)
+                  VALUES (:event,:tenant,:slug,'Gate Session Test',:start,:end,
+                          'Africa/Lagos','published',:purge)"""),
+                {
+                    "event": event_id,
+                    "tenant": auth_db.tenant_a,
+                    "slug": f"gate-session-{event_id}",
+                    "start": now,
+                    "end": now + timedelta(hours=1),
+                    "purge": now + timedelta(days=90, hours=1),
+                },
+            )
+            db.execute(
+                text("""INSERT INTO gates (id,tenant_id,event_id,name,status)
+                  VALUES (:gate,:tenant,:event,'Main Entrance','active')"""),
+                {"gate": gate_id, "tenant": auth_db.tenant_a, "event": event_id},
+            )
+        auth.issue_invitation(
+            "auth-a.example.test",
+            admin_session,
+            "gate-session@example.test",
+            "gate_scanner",
+            event_id,
+            gate_id,
+        )
+        invitation = parse_qs(urlsplit(email.links[-1]).fragment)["token"][0]
+        state, scanner_session = auth.accept_invitation(
+            "auth-a.example.test", invitation, "safe unlisted gate session password"
+        )
+        assert state == "session"
+
+        app = FastAPI()
+        app.include_router(gate_router)
+        app.state.event_operations_service = EventOperationsService(auth_db.runtime, auth)
+
+        @app.middleware("http")
+        async def trusted_host(request: Request, call_next):  # type: ignore[no-untyped-def]
+            request.state.trusted_hostname = canonical_authority(request, auth_db.settings)[0]
+            return await call_next(request)
+
+        client = TestClient(app)
+        headers = {
+            "host": "auth-a.example.test",
+            "cookie": f"__Host-ecs_session={scanner_session}",
+        }
+        response = client.get("/api/v1/gate/session", headers=headers)
+        assert response.status_code == 200
+        assert response.json() == {
+            "role": "gate_scanner",
+            "assignments": [
+                {
+                    "event_id": str(event_id),
+                    "event_name": "Gate Session Test",
+                    "gate_id": str(gate_id),
+                    "gate_name": "Main Entrance",
+                    "event_status": "published",
+                }
+            ],
+        }
+        assert (
+            client.get(
+                "/api/v1/gate/session",
+                headers={**headers, "host": "auth-b.example.test"},
+            ).status_code
+            == 401
+        )
+    finally:
+        _restore_scanner(auth_db)
 
 
 def test_gate_staff_directory_reassignment_and_revocation(

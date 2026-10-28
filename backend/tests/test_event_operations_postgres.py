@@ -14,7 +14,7 @@ from test_tenancy_postgres import Harness
 from app.db.models import JobRecord, Registration, Ticket
 from app.db.session import authorized_tenant_session
 from app.events.service import EventService
-from app.operations.service import EventOperationsService
+from app.operations.service import EventOperationsService, OperationDenied
 from app.registration.service import RegistrationService
 from app.tickets.crypto import TicketKeyring
 from app.tickets.email import MemoryTicketTransport
@@ -47,22 +47,15 @@ def test_bulk_import_validates_duplicates_and_creates_ticket_jobs(pg: Harness) -
         "phone": "phone",
         "custom": {"meal": "meal"},
     }
-    checked = operations.validate_import(
-        host, session, event_id, import_id, mapping, 1, "test-basis"
-    )
+    checked = operations.validate_import(host, session, event_id, import_id, mapping)
     assert (checked["valid_count"], checked["duplicate_count"], checked["invalid_count"]) == (
         1,
         1,
         1,
     )
-    queued = operations.commit_import(host, session, event_id, import_id, mapping, 1, "test-basis")
+    queued = operations.commit_import(host, session, event_id, import_id, True)
     assert queued["status"] == "queued"
-    assert (
-        operations.commit_import(host, session, event_id, import_id, mapping, 1, "test-basis")[
-            "status"
-        ]
-        == "queued"
-    )
+    assert operations.commit_import(host, session, event_id, import_id, True)["status"] == "queued"
     with Session(pg.owner) as db:
         job = db.scalar(
             select(JobRecord).where(
@@ -129,6 +122,69 @@ def test_bulk_import_validates_duplicates_and_creates_ticket_jobs(pg: Harness) -
     assert len(transport.messages) == 1
 
 
+def test_import_requires_active_notice_and_explicit_authorization(pg: Harness) -> None:
+    tenant, host, session, event_id, _ = published(pg)
+    operations = EventOperationsService(pg.runtime, pg.auth)
+    preview = operations.preview_import(
+        host,
+        session,
+        event_id,
+        "email-only.csv",
+        b"email,meal\nsynthetic@example.test,Vegan\n",
+    )
+    import_id = UUID(str(preview["import_id"]))
+    assert operations.import_policy_status(host, session, event_id)["available"] is False
+    with pytest.raises(OperationDenied, match="platform administrator"):
+        operations.validate_import(
+            host,
+            session,
+            event_id,
+            import_id,
+            {"email": "email", "custom": {"meal": "meal"}},
+        )
+    with pg.owner.connect() as db:
+        assert (
+            db.scalar(
+                text("SELECT count(*) FROM registrations WHERE event_id=:event"),
+                {"event": event_id},
+            )
+            == 0
+        )
+
+    seed_notice(pg, tenant)
+    assert operations.import_policy_status(host, session, event_id)["available"] is True
+    validated = operations.validate_import(
+        host,
+        session,
+        event_id,
+        import_id,
+        {"email": "email", "custom": {"meal": "meal"}},
+    )
+    assert validated["valid_count"] == 1
+    with pg.owner.connect() as db:
+        assert (
+            db.scalar(
+                text("SELECT count(*) FROM registrations WHERE event_id=:event"),
+                {"event": event_id},
+            )
+            == 0
+        )
+    with pytest.raises(OperationDenied, match="Confirm your authority"):
+        operations.commit_import(host, session, event_id, import_id, False)
+    queued = operations.commit_import(host, session, event_id, import_id, True)
+    assert queued["status"] == "queued"
+    with pg.owner.connect() as db:
+        assert (
+            db.scalar(
+                text("""SELECT count(*) FROM participant_imports
+            WHERE id=:import_id AND authorization_confirmed_at IS NOT NULL
+            AND authorization_confirmed_by IS NOT NULL"""),
+                {"import_id": import_id},
+            )
+            == 1
+        )
+
+
 def test_bulk_import_accepts_email_only_records(pg: Harness) -> None:
     tenant, host, session, event_id, _ = published(pg)
     seed_notice(pg, tenant)
@@ -143,11 +199,9 @@ def test_bulk_import_accepts_email_only_records(pg: Harness) -> None:
     )
     import_id = UUID(str(preview["import_id"]))
     mapping = {"full_name": "full_name", "email": "email", "custom": {"meal": "meal"}}
-    validated = operations.validate_import(
-        host, session, event_id, import_id, mapping, 1, "test-basis"
-    )
+    validated = operations.validate_import(host, session, event_id, import_id, mapping)
     assert validated["valid_count"] == 2
-    operations.commit_import(host, session, event_id, import_id, mapping, 1, "test-basis")
+    operations.commit_import(host, session, event_id, import_id, True)
     with Session(pg.owner) as db:
         job = db.scalar(
             select(JobRecord).where(
@@ -216,12 +270,9 @@ def test_import_only_email_csv_requires_explicit_issue_and_send(pg: Harness) -> 
     import_id = UUID(str(preview["import_id"]))
     mapping = {"email": "email"}
     assert (
-        operations.validate_import(host, session, event.id, import_id, mapping, 1, "test-basis")[
-            "valid_count"
-        ]
-        == 2
+        operations.validate_import(host, session, event.id, import_id, mapping)["valid_count"] == 2
     )
-    operations.commit_import(host, session, event.id, import_id, mapping, 1, "test-basis")
+    operations.commit_import(host, session, event.id, import_id, True)
     with Session(pg.owner) as db:
         job = db.scalar(
             select(JobRecord).where(

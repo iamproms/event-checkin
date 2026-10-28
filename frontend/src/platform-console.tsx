@@ -2,8 +2,9 @@ import { StrictMode, useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PlatformConsole } from './product/PlatformConsole';
 import { capabilities } from './product/capabilities';
-import { ButtonLink, CapabilityNotice, PageHeader, RestrictedState, SectionHeader, SuccessState, UnavailableState } from './product/components';
+import { ButtonLink, CapabilityNotice, PageHeader, RestrictedState, SectionHeader, SuccessState } from './product/components';
 import { getJson, mutateJson } from './management-api';
+import { OrganizationDirectory } from './product/OrganizationDirectory';
 import { Button, Field, Skeleton, Status } from './ui';
 import { safeErrorMessage } from './safe-error';
 import './product/product.css';
@@ -18,17 +19,19 @@ function Organizations() {
   const [organizerName, setOrganizerName] = useState(''); const [phone, setPhone] = useState(''); const [eventName, setEventName] = useState('');
   const [key, setKey] = useState(() => crypto.randomUUID());
   const [created, setCreated] = useState<Created | null>(null);
+  const [directoryRefresh, setDirectoryRefresh] = useState(0);
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   useEffect(() => { void getJson<PlatformSession>('/api/v1/platform/auth/session').then((value) => { setSession(value); setAuthorized(true); }).catch(() => { setSession(null); setAuthorized(false); }).finally(() => setChecked(true)); }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
-    try { setCreated(await mutateJson<Created>('/api/v1/platform/organizations', { name, organizer_email: email, organizer_name: organizerName || null, contact_phone: phone || null, event_name: eventName || null, idempotency_key: key }, true)); }
+    try { setCreated(await mutateJson<Created>('/api/v1/platform/organizations', { name, organizer_email: email, organizer_name: organizerName || null, contact_phone: phone || null, event_name: eventName || null, idempotency_key: key }, true)); setDirectoryRefresh(value => value + 1); }
     catch (cause) { setError(safeErrorMessage(cause, 'The organization could not be created.')); }
     finally { setBusy(false); }
   }
   async function resend() { if (!created) return; setBusy(true); setError(''); try { setCreated(await mutateJson<Created>(`/api/v1/platform/organizations/${encodeURIComponent(created.organization_id)}/invitation/resend`, {}, true)); } catch (cause) { setError(safeErrorMessage(cause, 'The account setup invitation could not be resent.')); } finally { setBusy(false); } }
-  return <><PageHeader eyebrow="Platform console" title="Organizations" description="Create an organization and invite its first organizer on the shared application host." />
+  return <><PageHeader eyebrow="Platform console" title="Organizations" description="Find and manage organizations, or invite a new organizer on the shared application host." />
     <CapabilityNotice capability={capabilities.platformOrganizations}>Platform administrators can create organizations and invite owners. Participant records remain tenant-scoped and unavailable to platform sessions.</CapabilityNotice>
+    <OrganizationDirectory authorized={authorized} refreshKey={directoryRefresh}/>
     <div className="organization-layout">
       <section className="panel-section"><SectionHeader title="Create organization" description="Verified membership and MFA protect organizer access. Custom domains remain optional." />
         {!checked ? <Skeleton lines={5} label="Checking platform permissions" /> : !authorized ? <RestrictedState title="Platform administrator access required" description="Sign in with an account holding the tenant.provision grant and complete MFA before creating an organization." action={<ButtonLink href="/">Open shared sign in</ButtonLink>} /> : created ? <SuccessState title={`${name} created`} description="The organization is reserved and the first organizer invitation was requested." action={<div className="organization-success"><dl><div><dt>Organizer</dt><dd>{created.organizer_email}</dd></div><div><dt>Invitation transport</dt><dd>{created.invitation_delivery_status.replaceAll('_', ' ')}</dd></div>{created.event_setup_name && <div><dt>Suggested first event</dt><dd>{created.event_setup_name}</dd></div>}<div><dt>Organization ID</dt><dd><code>{created.organization_id}</code></dd></div></dl><p>Provider acceptance does not prove inbox delivery. The organizer activates membership by accepting the invitation and completing required MFA.</p><div className="page-actions"><Button variant="secondary" loading={busy} loadingText="Sending invitation…" onClick={() => void resend()}>Resend account setup invitation</Button><Button onClick={() => { setCreated(null); setName(''); setEmail(''); setOrganizerName(''); setPhone(''); setEventName(''); setKey(crypto.randomUUID()); }}>Create another organization</Button></div></div>} /> : <form className="organization-create-form" onSubmit={event => void submit(event)}>
@@ -42,7 +45,7 @@ function Organizations() {
         {session && <p className="control-note">Authorized as {session.email} · {(session.permission || 'tenant.provision').replace('.', ' ')}</p>}
         {error && <Status tone="danger" title="Organization action failed" instruction={error} announce="assertive" />}
       </section>
-      <aside><CapabilityNotice capability={capabilities.platformOrganizationDirectory}/><UnavailableState title="Organization directory is unavailable" description="The current platform API can create organizations and resend their initial invitation, but it cannot list or retrieve organization records. No totals, rows, or detail values are estimated." /></aside>
+      <aside><SectionHeader title="After provisioning" description="Complete the organization's release controls." /><p>Review and activate an approved privacy notice before importing attendees or opening public registration.</p>{created && <ButtonLink href={`#privacy?organization=${encodeURIComponent(created.organization_id)}`} secondary>Set up privacy notice</ButtonLink>}</aside>
     </div></>;
 }
 createRoot(document.getElementById('root')!).render(<StrictMode><PlatformConsole provisioning={<Organizations/>}/></StrictMode>);

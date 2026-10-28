@@ -10,10 +10,10 @@ Marketing consent is separate, optional, unchecked by default, and never an elig
 
 Public duplicate-contact outcomes are deliberately neutral. The service does not merge, replace, or disclose an existing registration. Independent database constraints enforce one active email and one active phone per event under races.
 
-Bulk import records the active approved notice version and an operator-attested lawful basis as import evidence. Its `acknowledged_at` is null: importing a row is never represented as attendee acknowledgement. The import service rechecks the active notice before each background chunk and sets marketing opt-in to false. The event operator remains responsible for the separately approved notice delivery procedure before transactional tickets are sent to imported contacts.
+Bulk import reads the organization's active approved notice version and recorded lawful basis on the server. The organizer confirms authority and lawful basis before commit; the actor and time are audited. Its `acknowledged_at` is null: importing a row is never represented as attendee acknowledgement. The import service rechecks the active notice before each background chunk and sets marketing opt-in to false. The event operator remains responsible for the separately approved notice delivery procedure before transactional tickets are sent to imported contacts.
 
 ## Activation gates
 
-No notice is seeded by migrations. Real registration remains fail-closed until the product owner approves the final notice and lawful basis and an accountable operator installs an immutable active notice version. Synthetic notices may be used only in test databases.
+No notice is seeded by migrations. Real registration remains fail-closed until the product owner approves the final notice and lawful basis and a platform administrator records approval and activates an immutable notice version. Test-only notices may be drafted only in local/test environments and must never be used for real attendees.
 
 Production ticket email remains disabled until G-06 approves a transactional provider, verified sender/domain, callback authentication contract, data-processing region, retention terms, and credentials. A production adapter must use each delivery-intent UUID as the provider idempotency key and authenticate callbacks before changing delivery state. Local SMTP and the in-memory transport are test facilities and do not prove external delivery.

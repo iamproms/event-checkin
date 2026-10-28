@@ -55,13 +55,16 @@ export const eventApi = {
     const body = new FormData(); body.append('file', file);
     return mutateForm<ImportPreview>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/preview`, body);
   },
-  validateImport: (eventId: string, importId: string, mapping: Record<string, unknown>, noticeVersion: string, lawfulBasis: string) => mutateJson<ImportJob>(
-    `/api/v1/events/${encodeURIComponent(eventId)}/imports/${encodeURIComponent(importId)}/validate`,
-    { mapping, notice_version: Number(noticeVersion), lawful_basis: lawfulBasis },
+  importPolicy: (eventId: string) => getJson<{ available: boolean; message: string }>(
+    `/api/v1/events/${encodeURIComponent(eventId)}/imports/policy`,
   ),
-  commitImport: (eventId: string, importId: string, mapping: Record<string, unknown>, noticeVersion: string, lawfulBasis: string) => mutateJson<ImportJob>(
+  validateImport: (eventId: string, importId: string, mapping: Record<string, unknown>) => mutateJson<ImportJob>(
+    `/api/v1/events/${encodeURIComponent(eventId)}/imports/${encodeURIComponent(importId)}/validate`,
+    { mapping },
+  ),
+  commitImport: (eventId: string, importId: string, authorizationConfirmed: boolean) => mutateJson<ImportJob>(
     `/api/v1/events/${encodeURIComponent(eventId)}/imports/${encodeURIComponent(importId)}/commit`,
-    { mapping, notice_version: Number(noticeVersion), lawful_basis: lawfulBasis },
+    { authorization_confirmed: authorizationConfirmed },
   ),
   importStatus: (eventId: string, importId: string) => getJson<ImportJob>(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${encodeURIComponent(importId)}`),
   importErrors: (eventId: string, importId: string) => downloadFile(`/api/v1/events/${encodeURIComponent(eventId)}/imports/${encodeURIComponent(importId)}/errors.csv`),

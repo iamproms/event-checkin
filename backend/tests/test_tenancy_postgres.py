@@ -131,7 +131,7 @@ def pg(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Harness]:
         engines.append(owner)
         with owner.connect() as db:
             assert db.scalar(text("SELECT version_num FROM alembic_version")) == (
-                "0012_shared_event_release"
+                "0013_privacy_notice_workflow"
             )
             for table in ("tenant_domains", "staff_invitations", "domain_reconcile_requests"):
                 assert db.execute(

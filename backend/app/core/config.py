@@ -1,6 +1,7 @@
 from enum import StrEnum
 from functools import lru_cache
 from ipaddress import ip_address
+from urllib.parse import urlsplit
 
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,6 +44,7 @@ class Settings(BaseSettings):
     upload_url_seconds: int = 600
     download_url_seconds: int = 300
     platform_host: str | None = None
+    local_public_origin: str | None = None
     fallback_domain_suffix: str | None = None
     platform_database_url: SecretStr | None = None
     bootstrap_database_url: SecretStr | None = None
@@ -87,6 +89,22 @@ class Settings(BaseSettings):
             raise ValueError("signed URL lifetime is outside the allowed range")
         if self.platform_host is not None:
             self.platform_host = normalize_hostname(self.platform_host)
+        if self.local_public_origin is not None:
+            if self.app_env != Environment.LOCAL or self.platform_host is None:
+                raise ValueError("local public origin requires a local platform host")
+            local_origin = urlsplit(self.local_public_origin)
+            if (
+                local_origin.scheme != "https"
+                or local_origin.hostname != self.platform_host
+                or local_origin.port is None
+                or local_origin.username is not None
+                or local_origin.password is not None
+                or local_origin.path
+                or local_origin.query
+                or local_origin.fragment
+                or self.local_public_origin != f"https://{self.platform_host}:{local_origin.port}"
+            ):
+                raise ValueError("local public origin must be the platform HTTPS origin")
         if self.fallback_domain_suffix is not None:
             self.fallback_domain_suffix = normalize_hostname(self.fallback_domain_suffix)
         if self.platform_host and self.fallback_domain_suffix:

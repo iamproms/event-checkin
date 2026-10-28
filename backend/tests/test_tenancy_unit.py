@@ -101,6 +101,33 @@ def test_platform_host_and_forwarded_spoofing_fail_closed() -> None:
         )
 
 
+def test_local_https_platform_origin_is_explicit_and_host_bound() -> None:
+    settings = Settings(
+        app_env="local",
+        database_url="postgresql+psycopg://runtime:local@localhost/test",
+        platform_host="platform.local.example.test",
+        fallback_domain_suffix="local.example.test",
+        local_public_origin="https://platform.local.example.test:8443",
+    )
+    assert canonical_authority(
+        request("platform.local.example.test:8443", "/api/v1/platform/auth/csrf"),
+        settings,
+    ) == ("platform.local.example.test", "https://platform.local.example.test:8443")
+    with pytest.raises(AuthorityDenied):
+        canonical_authority(
+            request("other.local.example.test:8443", "/api/v1/platform/auth/csrf"),
+            settings,
+        )
+    with pytest.raises(ValueError):
+        Settings(
+            app_env="staging",
+            database_url="postgresql+psycopg://runtime:local@db.example.test/app?sslmode=require",
+            platform_host="platform.local.example.test",
+            fallback_domain_suffix="local.example.test",
+            local_public_origin="https://platform.local.example.test:8443",
+        )
+
+
 def test_untrusted_remote_peer_rejected() -> None:
     settings = Settings(
         app_env="staging",

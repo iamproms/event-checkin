@@ -72,11 +72,23 @@ const importFields = [{ key: 'full_name', label: 'Full name', required: false },
 function ImportWorkflow({ event, onCommitted }: { event: EventSummary | undefined; onCommitted: () => void }) {
   const eventId = event?.id || '';
   const [stage, setStage] = useState<ImportStage>('choose'); const [preview, setPreview] = useState<ImportPreview | null>(null); const [job, setJob] = useState<ImportJob | null>(null);
-  const [mapping, setMapping] = useState<Record<string, string>>({}); const [customMapping, setCustomMapping] = useState<Record<string, string>>({}); const [noticeVersion, setNoticeVersion] = useState(''); const [lawfulBasis, setLawfulBasis] = useState('');
+  const [mapping, setMapping] = useState<Record<string, string>>({}); const [customMapping, setCustomMapping] = useState<Record<string, string>>({});
+  const [policy, setPolicy] = useState<{ available: boolean; message: string } | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const columns = preview?.columns || preview?.headers || []; const importId = preview?.import_id || preview?.id || '';
   const fullMapping = { ...mapping, custom: customMapping };
-  useEffect(() => { setStage('choose'); setPreview(null); setJob(null); setError(''); }, [eventId]);
+  useEffect(() => { setStage('choose'); setPreview(null); setJob(null); setPolicy(null); setAuthorizationConfirmed(false); setError(''); }, [eventId]);
+  useEffect(() => {
+    if (stage !== 'mapping' || !eventId) return;
+    let active = true;
+    setPolicyLoading(true);
+    void eventApi.importPolicy(eventId).then(value => { if (active) setPolicy(value); })
+      .catch(cause => { if (active) setPolicy({ available: false, message: message(cause) }); })
+      .finally(() => { if (active) setPolicyLoading(false); });
+    return () => { active = false; };
+  }, [eventId, stage]);
   useEffect(() => {
     if (stage !== 'processing' || !eventId || !importId) return;
     let active = true;
@@ -92,29 +104,36 @@ function ImportWorkflow({ event, onCommitted }: { event: EventSummary | undefine
     void check(); const timer = setInterval(() => void check(), 1500);
     return () => { active = false; clearInterval(timer); };
   }, [eventId, importId, stage]);
-  async function upload(file?: File) { if (!file || !eventId) return; setBusy(true); setError(''); try { const next = await eventApi.previewImport(eventId, file); const source = next.columns || next.headers || []; setPreview(next); setMapping(next.suggested_mapping || { full_name: source.find(column => /full.?name|name/i.test(column)) || '', email: source.find(column => /e.?mail/i.test(column)) || '', phone: source.find(column => /phone|mobile|tel/i.test(column)) || '' }); if (next.reused && ['queued','processing','completed','failed'].includes(next.status || '')) { setJob(next); setStage(next.status === 'completed' ? 'committed' : next.status === 'failed' ? 'failed' : 'processing'); } else setStage('mapping'); } catch (cause) { setError(message(cause)); } finally { setBusy(false); } }
-  async function validate() { setBusy(true); setError(''); try { const result = await eventApi.validateImport(eventId, importId, fullMapping, noticeVersion, lawfulBasis); setJob(result); setStage('validated'); } catch (cause) { setError(message(cause)); } finally { setBusy(false); } }
+  async function upload(file?: File) { if (!file || !eventId) return; setBusy(true); setError(''); setAuthorizationConfirmed(false); try { const next = await eventApi.previewImport(eventId, file); const source = next.columns || next.headers || []; setPreview(next); setMapping(next.suggested_mapping || { full_name: source.find(column => /full.?name|name/i.test(column)) || '', email: source.find(column => /e.?mail/i.test(column)) || '', phone: source.find(column => /phone|mobile|tel/i.test(column)) || '' }); if (next.reused && ['queued','processing','completed','failed'].includes(next.status || '')) { setJob(next); setStage(next.status === 'completed' ? 'committed' : next.status === 'failed' ? 'failed' : 'processing'); } else setStage('mapping'); } catch (cause) { setError(message(cause)); } finally { setBusy(false); } }
+  async function validate() { setBusy(true); setError(''); setAuthorizationConfirmed(false); try { const result = await eventApi.validateImport(eventId, importId, fullMapping); setJob(result); setStage('validated'); } catch (cause) { setError(message(cause)); } finally { setBusy(false); } }
   async function commit() {
     setBusy(true); setError('');
     try {
-      const result = await eventApi.commitImport(eventId, importId, fullMapping, noticeVersion, lawfulBasis); setJob(result);
+      const result = await eventApi.commitImport(eventId, importId, authorizationConfirmed); setJob(result);
       if (result.status === 'completed') { setStage('committed'); onCommitted(); return; }
       if (result.status === 'failed') { setStage('failed'); throw new Error('The import job failed. Download the row errors and correct the source file.'); }
       setStage('processing');
     } catch (cause) { setError(message(cause)); } finally { setBusy(false); }
   }
   async function downloadErrors() { setError(''); try { await eventApi.importErrors(eventId, importId); } catch (cause) { setError(message(cause)); } }
+  const requiredCustomMissing = (event?.form_schema?.fields || []).some(field => field.required && !customMapping[field.key]);
+  const validationBlocker = !mapping.email ? 'Map the email address column to continue.'
+    : requiredCustomMissing ? 'Map every required event question to a source column.'
+    : policyLoading || !policy ? 'Checking the organization privacy notice…'
+    : !policy.available ? policy.message : '';
   return <section className="panel-section import-workflow" aria-labelledby="import-title"><SectionHeader title="Bulk participant import" description="CSV or XLSX · preview, map, validate, then commit" />
-    <ol className="stepper" aria-label="Import progress">{['Choose file','Map columns','Validate','Commit'].map((label,index) => { const current = stage === 'processing' ? 3 : ['choose','mapping','validated','committed'].indexOf(stage); return <li key={label} className={index <= current ? 'is-complete' : ''}>{label}</li>; })}</ol>
+    <ol className="stepper" aria-label="Import progress">{['Choose file','Map columns','Validate','Confirm and import'].map((label,index) => { const current = stage === 'processing' ? 3 : ['choose','mapping','validated','committed'].indexOf(stage); return <li key={label} className={index <= current ? 'is-complete' : ''}>{label}</li>; })}</ol>
     {stage === 'choose' && <div className="upload-zone"><Icon name="attendees"/><h3 id="import-title">Choose an attendee file</h3><p>The file is uploaded to the tenant-scoped import service. Accepted formats: .csv and .xlsx.</p><label className="product-button">{busy ? 'Uploading…' : 'Choose CSV or XLSX'}<input className="sr-only" type="file" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" disabled={busy || !eventId} onChange={event => void upload(event.target.files?.[0])}/></label></div>}
     {stage === 'mapping' && <><div className="mapping-grid">{importFields.map(field => <label key={field.key}><span>{field.label}{field.required ? ' *' : ''}</span><select value={mapping[field.key] || ''} onChange={event => setMapping(current => ({ ...current, [field.key]: event.target.value }))}><option value="">{field.required ? 'Select source column' : 'Not provided'}</option>{columns.map(column => <option key={column} value={column}>{column}</option>)}</select></label>)}{(event?.form_schema?.fields || []).map(field => <label key={field.key}><span>{field.label}{field.required ? ' *' : ''}</span><select value={customMapping[field.key] || ''} onChange={change => setCustomMapping(current => ({...current, [field.key]: change.target.value}))}><option value="">{field.required ? 'Select source column' : 'Not provided'}</option>{columns.map(column => <option key={column} value={column}>{column}</option>)}</select></label>)}</div>
-      <div className="form-grid"><label>Privacy notice version<input value={noticeVersion} onChange={event => setNoticeVersion(event.target.value)} placeholder="Published notice version"/></label><label>Approved lawful basis<input value={lawfulBasis} onChange={event => setLawfulBasis(event.target.value)} placeholder="Documented basis reference"/></label></div>
+      <p className={policy && !policy.available && !policyLoading ? 'request-error' : 'live-callout'} role="status">{policyLoading ? 'Checking the approved privacy notice…' : policy?.message || 'Checking the approved privacy notice…'}</p>
       <div className="preview-summary"><span>{preview?.row_count || preview?.total_rows || 0} rows detected</span><span>{columns.length} columns</span><span>No records created yet</span></div>
       {preview?.sample?.length ? <DataTable label="Import preview, first eight rows" columns={columns.slice(0,6)} rows={preview.sample.map(row => columns.slice(0,6).map(column => row[column] || '—'))}/> : null}
-      <div className="page-actions"><button className="product-button product-button--secondary" onClick={() => { setPreview(null); setStage('choose'); }}>Choose another file</button><button className="product-button" disabled={busy || !mapping.email || !noticeVersion || !lawfulBasis || (event?.form_schema?.fields || []).some(field => field.required && !customMapping[field.key])} onClick={() => void validate()}>{busy ? 'Validating…' : 'Validate rows'}</button></div></>}
+      <div className="page-actions"><button className="product-button product-button--secondary" onClick={() => { setPreview(null); setStage('choose'); }}>Choose another file</button><button className="product-button" disabled={busy || !!validationBlocker} aria-busy={busy} onClick={() => void validate()}>{busy ? <><span className="gate-spinner" aria-hidden="true"/> Validating rows…</> : 'Validate rows'}</button></div>{validationBlocker && validationBlocker !== policy?.message && <p className="form-help" role="status">{validationBlocker}</p>}</>}
     {(stage === 'validated' || stage === 'processing' || stage === 'committed' || stage === 'failed') && <><MetricStrip metrics={[{label:'Rows',value:String(job?.row_count ?? 0),detail:'Uploaded'},{label:'Valid',value:String(job?.valid_count ?? 0),detail:'Eligible to create'},{label:'Invalid',value:String(job?.invalid_count ?? 0),detail:'Requires correction'},{label:'Duplicates',value:String(job?.duplicate_count ?? 0),detail:'Not overwritten'}]} />
       {job?.errors?.length ? <DataTable label="Import validation errors" columns={['Row','Issues']} rows={job.errors.slice(0,10).map(row => [row.row_number,row.errors.map(readableImportIssue).join('; ')])}/> : null}
-      <div className="page-actions"><button className="product-button product-button--secondary" onClick={() => { setPreview(null); setJob(null); setStage('choose'); }}>Upload corrected file</button><button className="product-button product-button--secondary" onClick={() => void downloadErrors()}>Download row errors</button>{stage === 'validated' && <button className="product-button" disabled={busy || (job?.valid_count ?? 0) < 1} onClick={() => void commit()}>{busy ? 'Starting import…' : 'Create valid registrations'}</button>}</div>
+      {stage === 'validated' && <label className="import-authorization"><input type="checkbox" checked={authorizationConfirmed} onChange={change => setAuthorizationConfirmed(change.target.checked)}/><span>I confirm that I have the appropriate authority and lawful basis to process these attendee records for event check-in and transactional ticket communications.</span></label>}
+      <div className="page-actions"><button className="product-button product-button--secondary" onClick={() => { setPreview(null); setJob(null); setAuthorizationConfirmed(false); setStage('choose'); }}>Upload corrected file</button><button className="product-button product-button--secondary" onClick={() => void downloadErrors()}>Download row errors</button>{stage === 'validated' && <button className="product-button" disabled={busy || (job?.valid_count ?? 0) < 1 || !authorizationConfirmed} onClick={() => void commit()}>{busy ? 'Starting import…' : 'Import attendees'}</button>}</div>
+      {stage === 'validated' && !authorizationConfirmed && <p className="form-help" role="status">Confirm your authority and lawful basis before importing attendees.</p>}
       {stage === 'processing' && <div className="processing-banner" role="status"><div><strong>Import processing</strong><p>Registrations are being committed in the background. You can keep this page open to see completion.</p><Progress label="Participant import" value={job?.progress ?? 0} /></div></div>}
       {stage === 'committed' && <div className="success-banner" role="status"><Icon name="checkin"/><div><strong>Import completed</strong><p>{job?.imported_count ?? 0} registrations were created. {event?.registration_mode === 'import_only' ? 'Review the results, then issue tickets from Ticketing.' : 'Ticket issuance has been queued.'}</p></div></div>}</>}
     {error && <p className="request-error" role="alert">{error}</p>}

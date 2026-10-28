@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.api.auth import SESSION_COOKIE, csrf
 from app.auth.service import AuthDenied, Forbidden
@@ -23,8 +23,10 @@ class StrictBody(BaseModel):
 
 class ImportPolicy(StrictBody):
     mapping: dict[str, object]
-    notice_version: int = Field(ge=1)
-    lawful_basis: str = Field(min_length=1, max_length=500)
+
+
+class ImportCommit(StrictBody):
+    authorization_confirmed: StrictBool
 
 
 class RedeemBody(StrictBody):
@@ -126,17 +128,27 @@ def validate_import(
         raise denied(exc) from exc
 
 
+@event_router.get("/imports/policy")
+def import_policy_status(
+    event_id: UUID, request: Request, operations: Service
+) -> dict[str, object]:
+    try:
+        return operations.import_policy_status(*credentials(request), event_id)
+    except (AuthDenied, Forbidden, OperationDenied) as exc:
+        raise denied(exc) from exc
+
+
 @event_router.post("/imports/{import_id}/commit", status_code=202, dependencies=[Depends(csrf)])
 def commit_import(
     event_id: UUID,
     import_id: UUID,
-    body: ImportPolicy,
+    body: ImportCommit,
     request: Request,
     operations: Service,
 ) -> dict[str, object]:
     try:
         return operations.commit_import(
-            *credentials(request), event_id, import_id, **body.model_dump()
+            *credentials(request), event_id, import_id, body.authorization_confirmed
         )
     except (AuthDenied, Forbidden, OperationDenied) as exc:
         raise denied(exc) from exc

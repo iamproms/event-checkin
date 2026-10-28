@@ -28,6 +28,7 @@ services:
   migrate:
     profiles: ["tools"]
     build: ./backend
+    image: event-checkin-local-api
     environment:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://eventcheckin:local_dev_only@db:5432/eventcheckin
@@ -37,12 +38,14 @@ services:
         condition: service_completed_successfully
   api:
     build: ./backend
+    image: event-checkin-local-api
     environment:
       APP_ENV: local
       DATABASE_URL: postgresql+psycopg://eventcheckin_app:local_app_only@db:5432/eventcheckin
       IDENTITY_DATABASE_URL: postgresql+psycopg://eventcheckin_identity_app:local_identity_only@db:5432/eventcheckin
       PLATFORM_DATABASE_URL: postgresql+psycopg://eventcheckin_platform_app:local_platform_only@db:5432/eventcheckin
       PLATFORM_HOST: platform.local.example.test
+      LOCAL_PUBLIC_ORIGIN: https://platform.local.example.test:8443
       FALLBACK_DOMAIN_SUFFIX: local.example.test
       INGRESS_PROXY_IPS: "127.0.0.1"
       AUTH_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY:-}
@@ -62,6 +65,12 @@ services:
       REGISTRATION_RATE_HMAC_KEY: local_registration_rate_key_12345
     ports:
       - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     depends_on:
       role-setup:
         condition: service_completed_successfully
@@ -99,6 +108,7 @@ services:
       - object_data_rustfs:/data
   object-storage-init:
     build: ./backend
+    image: event-checkin-local-api
     command: ["python", "-m", "app.worker.storage_bootstrap"]
     environment:
       APP_ENV: local
@@ -110,6 +120,7 @@ services:
       - object-storage
   worker:
     build: ./backend
+    image: event-checkin-local-api
     command: ["celery", "-A", "app.worker.celery_app:celery_app", "worker", "--loglevel=INFO"]
     environment:
       APP_ENV: local
@@ -133,6 +144,7 @@ services:
         condition: service_started
   dispatcher:
     build: ./backend
+    image: event-checkin-local-api
     command: ["python", "-m", "app.worker.dispatcher"]
     environment:
       APP_ENV: local
@@ -146,6 +158,7 @@ services:
         condition: service_healthy
   domain-maintenance:
     build: ./backend
+    image: event-checkin-local-api
     command: ["python", "-m", "app.tenancy.maintenance"]
     environment:
       APP_ENV: local
@@ -158,6 +171,7 @@ services:
         condition: service_completed_successfully
   storage-maintenance:
     build: ./backend
+    image: event-checkin-local-api
     command: ["python", "-m", "app.worker.storage_maintenance"]
     environment:
       APP_ENV: local
@@ -183,8 +197,15 @@ services:
       API_PROXY_TARGET: http://api:8000
     ports:
       - "127.0.0.1:5173:5173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/platform-console.html').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 volumes:
   postgres_data:
   redis_data:

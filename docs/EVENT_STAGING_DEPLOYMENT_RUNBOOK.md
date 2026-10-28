@@ -154,6 +154,15 @@ cross-tenant identity-context lookup, and idempotent shared onboarding. Review
 its role grants before applying it to remote PostgreSQL. A platform session
 does not provide tenant participant access.
 
+Migration `0013_privacy_notice_workflow` adds tenant-scoped platform notice
+drafting, approval, activation, and import authorization evidence. Review its
+role grants and FORCE RLS policy before applying it. No notice is seeded. After
+the separately approved notice text and lawful basis are available, a platform
+administrator can draft, record the external approval reference, and activate
+the notice in **Platform Console → Privacy notices**. The organizer then
+validates an email-only CSV and confirms authority before committing. See
+[privacy import workflow](PRIVACY_IMPORT_WORKFLOW.md).
+
 The present remote domain provider is deliberately disabled. Real DNS/TLS/smoke
 reconciliation requires an approved provider adapter; a manual database update
 is not a substitute.

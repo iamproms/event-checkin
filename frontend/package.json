@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests --ext ts,tsx",
     "test:tokens": "node scripts/tokens.test.mjs",
+    "test:local-proxy": "node --test scripts/local-proxy.test.mjs",
     "test:ui": "playwright test"
   },
   "dependencies": {

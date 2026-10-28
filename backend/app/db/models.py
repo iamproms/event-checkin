@@ -504,8 +504,15 @@ class RegistrationNoticeVersion(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     lawful_basis: Mapped[str] = mapped_column(Text, nullable=False)
     sha256: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    approved_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    approval_reference: Mapped[str | None] = mapped_column(Text)
+    test_only: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
     __table_args__ = (
         CheckConstraint("version > 0", name="ck_registration_notice_version"),
         CheckConstraint("octet_length(sha256) = 32", name="ck_registration_notice_digest"),
@@ -515,6 +522,11 @@ class RegistrationNoticeVersion(Base):
         CheckConstraint(
             "length(btrim(lawful_basis)) BETWEEN 1 AND 500",
             name="ck_registration_notice_basis",
+        ),
+        CheckConstraint("NOT active OR approved_at IS NOT NULL", name="ck_notice_active_approved"),
+        CheckConstraint(
+            "approval_reference IS NULL OR length(btrim(approval_reference)) BETWEEN 1 AND 500",
+            name="ck_notice_approval_reference",
         ),
         Index(
             "uq_registration_notice_active",
@@ -690,6 +702,10 @@ class ParticipantImport(Base):
     )
     notice_version: Mapped[int | None] = mapped_column(Integer)
     lawful_basis: Mapped[str | None] = mapped_column(Text)
+    authorization_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    authorization_confirmed_by: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id")
+    )
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     valid_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     invalid_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -714,6 +730,10 @@ class ParticipantImport(Base):
         ),
         UniqueConstraint("tenant_id", "event_id", "id", name="uq_participant_import_scope"),
         UniqueConstraint("tenant_id", "event_id", "file_sha256", name="uq_participant_import_file"),
+        CheckConstraint(
+            "(authorization_confirmed_at IS NULL) = (authorization_confirmed_by IS NULL)",
+            name="ck_import_authorization_evidence",
+        ),
     )
 
 

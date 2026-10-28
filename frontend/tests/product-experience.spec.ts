@@ -110,7 +110,7 @@ test('gate staff are directed away from the organizer workspace', async ({ page 
 
 test('platform console has a coherent control-plane route map', async ({ page }) => {
   await page.goto('/platform-console.html');
-  for (const [link, heading] of [['Organizations','Organizations'],['Domains','Domains'],['Subscriptions','Subscriptions'],['Operations','Operations'],['Settings','Platform settings']] as const) {
+  for (const [link, heading] of [['Organizations','Organizations'],['Privacy notices','Privacy notices'],['Domains','Domains'],['Subscriptions','Subscriptions'],['Operations','Operations'],['Settings','Platform settings']] as const) {
     await page.getByRole('link', { name: new RegExp(`^${link}`) }).click();
     await expect(page.getByRole('heading', { name: heading, level: 1 })).toBeVisible();
   }
@@ -123,6 +123,7 @@ test('platform console has a coherent control-plane route map', async ({ page })
 test('platform creation takes only organization and organizer details', async ({ page }) => {
   await page.route('**/api/v1/platform/auth/session', route => route.fulfill({ json: { email: 'admin@example.test' } }));
   await page.route('**/api/v1/platform/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
+  await page.route('**/api/v1/platform/organizations?*', route => route.fulfill({ json: { organizations: [], total: 0, limit: 25, offset: 0, has_more: false } }));
   await page.route('**/api/v1/platform/organizations', async route => {
     const body = route.request().postDataJSON();
     expect(body.name).toBe('Summit Operations');
@@ -138,6 +139,95 @@ test('platform creation takes only organization and organizer details', async ({
   await page.getByRole('button', { name: 'Create and invite organizer' }).click();
   await expect(page.getByText('accepted by transport')).toBeVisible();
   await expect(page.getByText('Provider acceptance does not prove inbox delivery.')).toBeVisible();
+});
+
+test('platform organization directory searches, shows details, and opens selected privacy notices', async ({ page }) => {
+  const organization = 'c1526557-cdf0-49b8-89a0-3516ab47ab41';
+  const item = { id: organization, name: 'Summit Operations', status: 'active', created_at: '2026-10-27T09:00:00Z', primary_organizer: 'organizer@example.test', invitation_delivery_status: 'accepted_by_transport' };
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.route('**/api/v1/platform/auth/session', route => route.fulfill({ json: { email: 'admin@example.test' } }));
+  await page.route('**/api/v1/platform/organizations?*', route => {
+    const q = new URL(route.request().url()).searchParams.get('q');
+    return route.fulfill({ json: { organizations: q === 'Summit' ? [item] : [], total: q === 'Summit' ? 1 : 0, limit: 25, offset: 0, has_more: false } });
+  });
+  await page.route(`**/api/v1/platform/organizations/${organization}`, route => route.fulfill({ json: item }));
+  await page.route(`**/api/v1/platform/organizations/${organization}/privacy-notices`, route => route.fulfill({ json: { organization_id: organization, organization_name: item.name, notices: [] } }));
+  await page.goto('/platform-console.html#organizations');
+  await expect(page.getByText('No organizations found')).toBeVisible();
+  await page.getByLabel('Find organization').fill('Summit');
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByText('organizer@example.test')).toBeVisible();
+  await page.getByRole('button', { name: 'View Summit Operations' }).click();
+  await expect(page.getByText(organization)).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 740 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await page.getByRole('button', { name: 'Copy UUID' }).click();
+  await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(organization);
+  await page.getByRole('link', { name: 'Manage privacy notices' }).click();
+  await expect(page).toHaveURL(new RegExp(`#privacy\\?organization=${organization}$`));
+  await expect(page.getByRole('heading', { name: item.name })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Organization' })).toHaveValue(organization);
+  await page.getByRole('combobox', { name: 'Organization' }).selectOption('');
+  await page.getByLabel('Find organization').fill('Summit');
+  await page.getByRole('button', { name: 'Search' }).click();
+  await page.getByRole('combobox', { name: 'Organization' }).selectOption(organization);
+  await expect(page.getByRole('heading', { name: item.name })).toBeVisible();
+});
+
+test('platform organization directory reports errors and recovers to an empty state', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/v1/platform/auth/session', route => route.fulfill({ json: { email: 'admin@example.test' } }));
+  await page.route('**/api/v1/platform/organizations?*', route => {
+    requests += 1;
+    return route.fulfill(requests < 3
+      ? { status: 503, json: { detail: { message: 'Directory temporarily unavailable' } } }
+      : { json: { organizations: [], total: 0, limit: 25, offset: 0, has_more: false } });
+  });
+  await page.goto('/platform-console.html#organizations');
+  await expect(page.getByRole('alert').filter({ hasText: 'Directory temporarily unavailable' })).toBeVisible();
+  requests = 2;
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByText('No organizations found')).toBeVisible();
+});
+
+test('platform administrator can draft, record approval, and activate a notice', async ({ page }) => {
+  const organization = 'c1526557-cdf0-49b8-89a0-3516ab47ab41';
+  await page.route('**/api/v1/platform/auth/session', route => route.fulfill({ json: { email: 'admin@example.test' } }));
+  await page.route('**/api/v1/platform/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
+  await page.route('**/api/v1/platform/organizations?*', route => route.fulfill({ json: { organizations: [], total: 0, limit: 25, offset: 0, has_more: false } }));
+  await page.route(`**/api/v1/platform/organizations/${organization}`, route => route.fulfill({ json: { id: organization, name: 'Summit', status: 'active', created_at: '2026-10-27T09:00:00Z', primary_organizer: null, invitation_delivery_status: null } }));
+  let notices: Array<{ version: number; body: string; lawful_basis: string; test_only: boolean; approved_at: string | null; approval_reference: string | null; active: boolean }> = [];
+  await page.route(`**/api/v1/platform/organizations/${organization}/privacy-notices**`, async route => {
+    const request = route.request();
+    if (request.method() === 'GET') return route.fulfill({ json: { organization_id: organization, organization_name: 'Summit', notices } });
+    const input = request.postDataJSON();
+    if (request.url().endsWith('/approve')) {
+      expect(input).toEqual({ approval_reference: 'approval-2026-01', confirmed: true });
+      notices[0] = { ...notices[0], approved_at: '2026-10-27T10:00:00Z', approval_reference: input.approval_reference };
+    } else if (request.url().endsWith('/activate')) {
+      expect(input).toEqual({ confirmed: true });
+      notices[0] = { ...notices[0], active: true };
+    } else {
+      expect(input).toEqual({ body: 'Synthetic local test notice', lawful_basis: 'test-basis', test_only: true });
+      notices = [{ version: 1, body: input.body, lawful_basis: input.lawful_basis, test_only: input.test_only, approved_at: null, approval_reference: null, active: false }];
+    }
+    return route.fulfill({ status: request.url().endsWith('/privacy-notices') ? 201 : 200, json: notices[0] });
+  });
+  await page.goto(`/platform-console.html#privacy?organization=${organization}`);
+  await expect(page.getByRole('combobox', { name: 'Organization' })).toHaveValue(organization);
+  await page.getByLabel('Notice text').fill('Synthetic local test notice');
+  await page.getByLabel('Recorded lawful basis').fill('test-basis');
+  await page.getByRole('checkbox', { name: 'Test-only notice for synthetic local or test data' }).check();
+  await page.getByRole('button', { name: 'Create draft' }).click();
+  await expect(page.getByRole('heading', { name: 'Version 1' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Record approval' })).toBeDisabled();
+  await page.getByLabel('External approval reference for version 1').fill('approval-2026-01');
+  await page.getByRole('checkbox', { name: /required external approval/ }).check();
+  await page.getByRole('button', { name: 'Record approval' }).click();
+  await page.getByRole('checkbox', { name: /Activate this approved version/ }).check();
+  await page.getByRole('button', { name: 'Activate version 1' }).click();
+  await expect(page.getByRole('heading', { name: 'Version 1' }).getByText('Active')).toBeVisible();
 });
 
 test('shared sign-in chooses a server-authorized workspace after password verification', async ({ page }) => {
@@ -199,27 +289,39 @@ test('gate experience shows admission only after server-confirmed redemption', a
   await expect(page.getByText('No participant identity is shown')).toBeVisible();
 });
 
-test('bulk import maps published custom fields and sends the approved policy to live APIs', async ({ page }) => {
+test('gate session shows a useful error when the server returns non-JSON', async ({ page }) => {
+  await page.route('**/api/v1/gate/session', route => route.fulfill({
+    status: 500, contentType: 'text/plain', body: 'Internal Server Error',
+  }));
+  await page.goto('/gate.html');
+  await expect(page.getByRole('heading', { name: 'Gate access required' })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Request failed (HTTP 500). Try again or contact support.',
+  );
+  await expect(page.getByText('Unexpected token')).toHaveCount(0);
+});
+
+test('bulk import maps published custom fields without organizer policy identifiers', async ({ page }) => {
   await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
   await page.route('**/api/v1/events', route => route.fulfill({ json: { events: [{ id: 'event-1', slug: 'summit', name: 'Innovation Summit 2026', status: 'published', starts_at: '2026-11-01T08:00:00Z', ends_at: '2026-11-01T18:00:00Z', revision: 1, form_schema: { fields: [{ key: 'meal', label: 'Meal', required: true }] } }] } }));
   await page.route('**/api/v1/events/event-1/registrations**', route => route.fulfill({ json: { registrations: [], next_cursor: null } }));
   await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
   await page.route('**/api/v1/events/event-1/imports/preview', route => route.fulfill({ status: 201, json: { import_id: 'import-1', row_count: 1, columns: ['full_name','email','phone','meal'], sample: [{ full_name: 'Synthetic Attendee', email: 'synthetic@example.test', phone: '+2348012345678', meal: 'Vegan' }] } }));
+  await page.route('**/api/v1/events/event-1/imports/policy', route => route.fulfill({ json: { available: true, message: 'Approved privacy notice available.' } }));
   await page.route('**/api/v1/events/event-1/imports/import-1/validate', async route => {
     const body = route.request().postDataJSON();
-    expect(body).toEqual({ mapping: { full_name: 'full_name', email: 'email', phone: 'phone', custom: { meal: 'meal' } }, notice_version: 1, lawful_basis: 'test-basis' });
+    expect(body).toEqual({ mapping: { full_name: 'full_name', email: 'email', phone: 'phone', custom: { meal: 'meal' } } });
     await route.fulfill({ json: { import_id: 'import-1', status: 'validated', row_count: 2, valid_count: 1, invalid_count: 1, duplicate_count: 0, imported_count: 0, progress: 0, errors: [{ row_number: 2, errors: ['INVALID_EMAIL'] }] } });
   });
   await page.goto('/workspace.html#participants');
   await page.getByRole('tab', { name: 'Bulk import' }).click();
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/synthetic-import.csv');
   await page.getByLabel('Meal *').selectOption('meal');
-  await page.getByLabel('Privacy notice version').fill('1');
-  await page.getByLabel('Approved lawful basis').fill('test-basis');
   await page.getByRole('button', { name: 'Validate rows' }).click();
   await expect(page.getByText('Eligible to create')).toBeVisible();
   await expect(page.getByText('Enter a valid email address.')).toBeVisible();
   await expect(page.getByText('INVALID_EMAIL')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Import attendees' })).toBeDisabled();
 });
 
 test('bulk import accepts a CSV containing only an email column', async ({ page }) => {
@@ -228,6 +330,7 @@ test('bulk import accepts a CSV containing only an email column', async ({ page 
   await page.route('**/api/v1/events/event-1/registrations**', route => route.fulfill({ json: { registrations: [], next_cursor: null } }));
   await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
   await page.route('**/api/v1/events/event-1/imports/preview', route => route.fulfill({ status: 201, json: { import_id: 'import-1', row_count: 1, columns: ['email'], sample: [{ email: 'synthetic@example.test' }] } }));
+  await page.route('**/api/v1/events/event-1/imports/policy', route => route.fulfill({ json: { available: true, message: 'Approved privacy notice available.' } }));
   await page.route('**/api/v1/events/event-1/imports/import-1/validate', async route => {
     const body = route.request().postDataJSON();
     expect(body.mapping.phone).toBe('');
@@ -238,10 +341,53 @@ test('bulk import accepts a CSV containing only an email column', async ({ page 
   await page.goto('/workspace.html#participants');
   await page.getByRole('tab', { name: 'Bulk import' }).click();
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/only-email.csv');
-  await page.getByLabel('Privacy notice version').fill('1');
-  await page.getByLabel('Approved lawful basis').fill('test-basis');
   await page.getByRole('button', { name: 'Validate rows' }).click();
   await expect(page.getByText('Eligible to create')).toBeVisible();
+});
+
+test('bulk import explains missing approval and surfaces API validation errors', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
+  await page.route('**/api/v1/events', route => route.fulfill({ json: { events: [{ id: 'event-1', slug: 'summit', name: 'Summit', status: 'published', starts_at: '2026-11-01T08:00:00Z', ends_at: '2026-11-01T18:00:00Z', revision: 1 }] } }));
+  await page.route('**/api/v1/events/event-1/registrations**', route => route.fulfill({ json: { registrations: [], next_cursor: null } }));
+  await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
+  await page.route('**/api/v1/events/event-1/imports/preview', route => route.fulfill({ status: 201, json: { import_id: 'import-1', row_count: 1, columns: ['email'], sample: [{ email: 'synthetic@example.test' }] } }));
+  let approved = false;
+  await page.route('**/api/v1/events/event-1/imports/policy', route => route.fulfill({ json: approved
+    ? { available: true, message: 'Approved privacy notice available.' }
+    : { available: false, message: 'No active approved privacy notice is available. Ask a platform administrator to approve and activate one.' } }));
+  await page.route('**/api/v1/events/event-1/imports/import-1/validate', route => route.fulfill({ status: 422, json: { detail: [{ loc: ['body', 'mapping', 'email'], msg: 'Email column is invalid' }] } }));
+  await page.goto('/workspace.html#participants');
+  await page.getByRole('tab', { name: 'Bulk import' }).click();
+  await page.locator('input[type=file]').setInputFiles('tests/fixtures/only-email.csv');
+  await expect(page.getByText('No active approved privacy notice is available')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Validate rows' })).toBeDisabled();
+  approved = true;
+  await page.getByRole('button', { name: 'Choose another file' }).click();
+  await page.locator('input[type=file]').setInputFiles('tests/fixtures/only-email.csv');
+  await page.getByRole('button', { name: 'Validate rows' }).click();
+  await expect(page.getByRole('alert').getByText('mapping.email: Email column is invalid')).toBeVisible();
+});
+
+test('bulk import requires an unchecked authorization before commit', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ json: { email: 'organizer@example.test', role: 'tenant_owner', tenant_id: 'tenant-1' } }));
+  await page.route('**/api/v1/events', route => route.fulfill({ json: { events: [{ id: 'event-1', slug: 'summit', name: 'Summit', status: 'published', starts_at: '2026-11-01T08:00:00Z', ends_at: '2026-11-01T18:00:00Z', revision: 1 }] } }));
+  await page.route('**/api/v1/events/event-1/registrations**', route => route.fulfill({ json: { registrations: [], next_cursor: null } }));
+  await page.route('**/api/v1/auth/csrf', route => route.fulfill({ json: { csrf_token: 'csrf' } }));
+  await page.route('**/api/v1/events/event-1/imports/preview', route => route.fulfill({ status: 201, json: { import_id: 'import-1', row_count: 1, columns: ['email'], sample: [{ email: 'synthetic@example.test' }] } }));
+  await page.route('**/api/v1/events/event-1/imports/policy', route => route.fulfill({ json: { available: true, message: 'Approved privacy notice available.' } }));
+  await page.route('**/api/v1/events/event-1/imports/import-1/validate', route => route.fulfill({ json: { import_id: 'import-1', status: 'validated', row_count: 1, valid_count: 1, invalid_count: 0, duplicate_count: 0, imported_count: 0, errors: [] } }));
+  let committed = false;
+  await page.route('**/api/v1/events/event-1/imports/import-1/commit', route => { committed = true; expect(route.request().postDataJSON()).toEqual({ authorization_confirmed: true }); return route.fulfill({ status: 202, json: { import_id: 'import-1', status: 'queued', row_count: 1, valid_count: 1 } }); });
+  await page.route('**/api/v1/events/event-1/imports/import-1', route => route.fulfill({ json: { import_id: 'import-1', status: 'queued', row_count: 1, valid_count: 1 } }));
+  await page.goto('/workspace.html#participants');
+  await page.getByRole('tab', { name: 'Bulk import' }).click();
+  await page.locator('input[type=file]').setInputFiles('tests/fixtures/only-email.csv');
+  await page.getByRole('button', { name: 'Validate rows' }).click();
+  await expect(page.getByRole('button', { name: 'Import attendees' })).toBeDisabled();
+  expect(committed).toBe(false);
+  await page.getByRole('checkbox', { name: /appropriate authority and lawful basis/ }).check();
+  await page.getByRole('button', { name: 'Import attendees' }).click();
+  await expect.poll(() => committed).toBe(true);
 });
 
 test('gate network ambiguity never reports admission', async ({ page }) => {

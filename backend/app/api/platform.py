@@ -3,8 +3,8 @@
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import clear_cookie, csrf, csrf_token, set_cookie
@@ -13,6 +13,8 @@ from app.auth.email import DeliveryUnavailable
 from app.auth.service import AuthDenied
 from app.tenancy.domains import DomainDenied, DomainService
 from app.tenancy.platform_auth import PlatformAuth
+from app.tenancy.platform_organizations import PlatformOrganizations
+from app.tenancy.privacy_notices import PrivacyNoticeDenied, PrivacyNotices
 from app.tenancy.shared_onboarding import SharedOnboarding
 
 router = APIRouter(prefix="/api/v1/platform", tags=["platform provisioning"])
@@ -73,6 +75,38 @@ class SharedOrganizationBody(BaseModel):
     contact_phone: str | None = Field(default=None, max_length=40)
     event_name: str | None = Field(default=None, max_length=200)
     idempotency_key: UUID
+
+
+class NoticeDraftBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    body: str = Field(min_length=1, max_length=20_000)
+    lawful_basis: str = Field(min_length=1, max_length=500)
+    test_only: bool = False
+
+
+class NoticeApprovalBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    approval_reference: str = Field(min_length=1, max_length=500)
+    confirmed: StrictBool
+
+
+class NoticeActivationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed: StrictBool
+
+
+def notice_failure(exc: Exception) -> HTTPException:
+    if isinstance(exc, AuthDenied):
+        return HTTPException(401, detail={"code": "AUTH_DENIED", "message": "Sign in required"})
+    if isinstance(exc, DomainDenied):
+        return HTTPException(
+            403, detail={"code": "FORBIDDEN", "message": "Platform approval access required"}
+        )
+    return HTTPException(409, detail={"code": "NOTICE_STATE", "message": str(exc)})
+
+
+def notice_service(request: Request, service: Domains) -> PrivacyNotices:
+    return PrivacyNotices(service.control_engine, request.app.state.settings.app_env)
 
 
 def fail(exc: Exception) -> HTTPException:
@@ -173,16 +207,133 @@ def actor(request: Request, auth: PlatformAuth) -> UUID:
     return auth.current(request.cookies.get(PLATFORM_SESSION_COOKIE, "")).id
 
 
+@router.get("/organizations")
+def list_organizations(
+    request: Request,
+    auth: Auth,
+    service: Domains,
+    q: str = Query(default="", max_length=100),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=100_000),
+) -> dict[str, object]:
+    try:
+        return PlatformOrganizations(service.control_engine).list(
+            actor(request, auth), query=q, limit=limit, offset=offset
+        )
+    except (AuthDenied, DomainDenied) as exc:
+        raise notice_failure(exc) from exc
+
+
+@router.get("/organizations/{tenant_id}")
+def get_organization(
+    tenant_id: UUID, request: Request, auth: Auth, service: Domains
+) -> dict[str, object]:
+    try:
+        organization = PlatformOrganizations(service.control_engine).get(
+            actor(request, auth), tenant_id
+        )
+    except (AuthDenied, DomainDenied) as exc:
+        raise notice_failure(exc) from exc
+    if organization is None:
+        raise HTTPException(
+            404, detail={"code": "ORGANIZATION_NOT_FOUND", "message": "Organization unavailable"}
+        )
+    return organization
+
+
+@router.get("/organizations/{tenant_id}/privacy-notices")
+def list_privacy_notices(
+    tenant_id: UUID, request: Request, auth: Auth, service: Domains
+) -> dict[str, object]:
+    try:
+        return notice_service(request, service).list(actor(request, auth), tenant_id)
+    except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
+        raise notice_failure(exc) from exc
+
+
+@router.post(
+    "/organizations/{tenant_id}/privacy-notices", status_code=201, dependencies=[Depends(csrf)]
+)
+def draft_privacy_notice(
+    tenant_id: UUID, body: NoticeDraftBody, request: Request, auth: Auth, service: Domains
+) -> dict[str, object]:
+    try:
+        return notice_service(request, service).draft(
+            actor(request, auth), tenant_id, body.body, body.lawful_basis, body.test_only
+        )
+    except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
+        raise notice_failure(exc) from exc
+
+
+@router.post(
+    "/organizations/{tenant_id}/privacy-notices/{version}/approve", dependencies=[Depends(csrf)]
+)
+def approve_privacy_notice(
+    tenant_id: UUID,
+    version: int,
+    body: NoticeApprovalBody,
+    request: Request,
+    auth: Auth,
+    service: Domains,
+) -> dict[str, object]:
+    if not body.confirmed:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "CONFIRMATION_REQUIRED",
+                "message": "Confirm external approval before continuing",
+            },
+        )
+    try:
+        return notice_service(request, service).approve(
+            actor(request, auth), tenant_id, version, body.approval_reference
+        )
+    except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
+        raise notice_failure(exc) from exc
+
+
+@router.post(
+    "/organizations/{tenant_id}/privacy-notices/{version}/activate", dependencies=[Depends(csrf)]
+)
+def activate_privacy_notice(
+    tenant_id: UUID,
+    version: int,
+    body: NoticeActivationBody,
+    request: Request,
+    auth: Auth,
+    service: Domains,
+) -> dict[str, object]:
+    if not body.confirmed:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "CONFIRMATION_REQUIRED",
+                "message": "Confirm activation before continuing",
+            },
+        )
+    try:
+        return notice_service(request, service).activate(actor(request, auth), tenant_id, version)
+    except (AuthDenied, DomainDenied, PrivacyNoticeDenied) as exc:
+        raise notice_failure(exc) from exc
+
+
 @router.post("/organizations", dependencies=[Depends(csrf)], status_code=201)
 def create_shared_organization(
-    body: SharedOrganizationBody, request: Request, auth: Auth, service: Domains,
+    body: SharedOrganizationBody,
+    request: Request,
+    auth: Auth,
+    service: Domains,
 ) -> dict[str, str]:
     try:
         return SharedOnboarding(service.control_engine, request.app.state.email_delivery).create(
-            actor=actor(request, auth), idempotency_key=body.idempotency_key,
-            name=body.name, organizer_email=body.organizer_email,
-            organizer_name=body.organizer_name, contact_phone=body.contact_phone,
-            event_name=body.event_name, origin=request.state.trusted_origin,
+            actor=actor(request, auth),
+            idempotency_key=body.idempotency_key,
+            name=body.name,
+            organizer_email=body.organizer_email,
+            organizer_name=body.organizer_name,
+            contact_phone=body.contact_phone,
+            event_name=body.event_name,
+            origin=request.state.trusted_origin,
         )
     except (AuthDenied, DomainDenied, ValueError, IntegrityError) as exc:
         raise fail(exc) from exc
@@ -190,11 +341,16 @@ def create_shared_organization(
 
 @router.post("/organizations/{tenant_id}/invitation/resend", dependencies=[Depends(csrf)])
 def resend_shared_organizer(
-    tenant_id: UUID, request: Request, auth: Auth, service: Domains,
+    tenant_id: UUID,
+    request: Request,
+    auth: Auth,
+    service: Domains,
 ) -> dict[str, str]:
     try:
         return SharedOnboarding(service.control_engine, request.app.state.email_delivery).resend(
-            actor(request, auth), tenant_id, request.state.trusted_origin,
+            actor(request, auth),
+            tenant_id,
+            request.state.trusted_origin,
         )
     except (AuthDenied, DomainDenied, ValueError) as exc:
         raise fail(exc) from exc

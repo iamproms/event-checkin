@@ -2,7 +2,7 @@
 
 ## Event-first shared-host release (in progress)
 
-The current feature branch adds migration `0012_shared_event_release`. The platform host now has one staff sign-in and an organization form that requires only an organization name and organizer email. After account setup and MFA, organizers use the same host for their tenant-scoped workspace. Newly created events default to import-only mode; CSV files may contain only an email column. Import, QR issuance, and ticket sending are separate actions. The established custom-domain and public-registration paths remain available.
+The event-first branch adds migration `0012_shared_event_release`. The platform host has one staff sign-in and an organization form that requires only an organization name and organizer email. After account setup and MFA, organizers use the same host for their tenant-scoped workspace. Newly created events default to import-only mode; CSV files may contain only an email column. Import, QR issuance, and ticket sending are separate actions. The established custom-domain and public-registration paths remain available. Migration `0013_privacy_notice_workflow` adds platform-admin notice drafting, approval, and activation; see [privacy import workflow](docs/PRIVACY_IMPORT_WORKFLOW.md).
 
 For a local rehearsal, back up the database and apply the new migration, then run the local HTTPS services. On the existing development workstation, the private, Git-ignored helper `bash .env.local-event-smoke` performs those steps and checks migration `0012_shared_event_release`; fresh checkouts should follow [Local startup](#local-startup) and the [HTTPS host runbook](docs/M2-01_PROVISIONING_RUNBOOK.md). Open the platform hostname at `/`, create the organization in `/platform-console.html#organizations`, inspect the local Mailpit inbox, and follow the invitation. Staging and production email remain disabled until an approved transactional provider, sender, privacy notice, and deployment region are configured. See [the staging runbook](docs/EVENT_STAGING_DEPLOYMENT_RUNBOOK.md) for the release gates.
 
@@ -33,6 +33,30 @@ Every future-facing surface is labeled `Demo data`, `Training demo`, or `Not con
 ## Local startup
 
 Prerequisites: Docker with Compose, Python 3.12 or 3.13, Node 22, and npm.
+
+### Existing Fedora HTTPS workstation
+
+The workstation's `.env` and `.env.compose.override.yaml` are private local
+configuration. After changing the API or Vite Docker source, rebuild only those
+images once. Routine restarts reuse them and preserve database volumes:
+
+```sh
+docker compose -f compose.yaml -f .env.compose.override.yaml --env-file .env build api web
+bash ops/local-browser-start.sh
+bash ops/local-browser-check.sh --login-probe
+```
+
+`local-browser-start.sh` waits for container health and checks `/health`,
+`/ready`, platform CSRF, and the current organization screen through local
+HTTPS. It reports occupied ports and failed services. If the earlier host-mode
+helpers own port 8443, run `bash .env.local-stop` once before starting Compose.
+The optional login probe
+uses one synthetic invalid account to verify the CSRF cookie and HTTPS Origin;
+it cannot verify an administrator's password or MFA. Open
+`https://platform.local.example.test:8443/` for the shared sign-in, then use
+`/platform-console.html` after authentication. The Git-ignored
+`.env.local-event-smoke` additionally backs up and checks migrations; it is not
+needed for an ordinary browser restart.
 
 ### Containers
 
@@ -104,7 +128,7 @@ The isolated M1-05 component examples are at `http://127.0.0.1:5173/ui-lab.html`
 
 ## Environment and migration policy
 
-`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. Production requires `sslmode=verify-full` for runtime, identity, job, and operator connections, plus a trusted database CA. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002`–`0012` cover tenant isolation, identity, reliable jobs/storage, domains, event configuration, branding, registration evidence, ticket delivery, import and check-in evidence, and shared-host event release. `TICKET_KEYRING_JSON` and `REGISTRATION_RATE_HMAC_KEY` are secrets; generate independent remote values and never use the local fixture. See [schema notes](docs/M1-02_SCHEMA_NOTES.md), [identity contracts](docs/M1-03_AUTH_CONTRACTS.md), [jobs runbook](docs/M1-04_JOBS_STORAGE_RUNBOOK.md), [M2-01 runbook](docs/M2-01_PROVISIONING_RUNBOOK.md), and the [combined registration/ticket runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
+`APP_ENV` must be `local`, `test`, `staging`, or `production`; `DATABASE_URL` is required. Staging and production reject loopback database URLs and require an explicit PostgreSQL TLS mode. Production requires `sslmode=verify-full` for runtime, identity, job, and operator connections, plus a trusted database CA. The deployment platform must inject secrets at runtime; example files contain placeholders only. Do not commit real `.env` files. Migrations `0002`–`0013` cover tenant isolation, identity, reliable jobs/storage, domains, event configuration, branding, registration evidence, ticket delivery, import and check-in evidence, shared-host event release, and the privacy notice approval workflow. `TICKET_KEYRING_JSON` and `REGISTRATION_RATE_HMAC_KEY` are secrets; generate independent remote values and never use the local fixture. See [schema notes](docs/M1-02_SCHEMA_NOTES.md), [identity contracts](docs/M1-03_AUTH_CONTRACTS.md), [jobs runbook](docs/M1-04_JOBS_STORAGE_RUNBOOK.md), [M2-01 runbook](docs/M2-01_PROVISIONING_RUNBOOK.md), and the [combined registration/ticket runbook](docs/M2-04_M3-01_M3-02_RUNBOOK.md).
 
 Run migrations as a **single release step before routing traffic to new code**. Back up first, review generated SQL and destructive operations, and rehearse on staging. Prefer a forward fix after a migration reaches production; downgrade only when explicitly reviewed as safe for existing data. The baseline and M1-02 migration can be upgraded and downgraded on an empty database; do not downgrade a populated database without a reviewed data plan.
 

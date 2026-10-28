@@ -112,7 +112,11 @@ def canonical_authority(request: Request, settings: Settings) -> tuple[str, str]
     # signed routing context, checked in the request middleware. The service
     # still requires a tenant-bound session and membership for every action.
     origin = (
-        (
+        settings.local_public_origin
+        if settings.app_env == Environment.LOCAL
+        and settings.local_public_origin is not None
+        and host == settings.platform_host
+        else (
             request.url.scheme
             if settings.app_env in {Environment.LOCAL, Environment.TEST}
             else "https"

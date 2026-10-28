@@ -28,6 +28,7 @@ from app.db.models import (
     Registration,
     RegistrationConsent,
     RegistrationNoticeVersion,
+    SecurityAuditEvent,
     Ticket,
     TicketDeliveryIntent,
 )
@@ -311,6 +312,37 @@ class EventOperationsService:
             custom,
         )
 
+    @staticmethod
+    def _active_notice(db: Session, tenant: UUID) -> RegistrationNoticeVersion:
+        notice = db.scalar(
+            select(RegistrationNoticeVersion).where(
+                RegistrationNoticeVersion.tenant_id == tenant,
+                RegistrationNoticeVersion.active.is_(True),
+                RegistrationNoticeVersion.approved_at.is_not(None),
+            )
+        )
+        if notice is None:
+            raise OperationDenied(
+                "No active approved privacy notice is available. "
+                "Ask a platform administrator to approve and activate one."
+            )
+        if hashlib.sha256(notice.body.encode("utf-8")).digest() != notice.sha256:
+            raise OperationDenied(
+                "Approved privacy notice integrity check failed. Contact a platform administrator."
+            )
+        return notice
+
+    def import_policy_status(self, host: str, token: str, event_id: UUID) -> dict[str, object]:
+        tenant, _ = self._scope(host, token, "attendee.export", event_id)
+        with authorized_tenant_session(self.engine, tenant) as db:
+            if db.get(Event, event_id) is None:
+                raise OperationDenied("Event unavailable")
+            try:
+                self._active_notice(db, tenant)
+            except OperationDenied as exc:
+                return {"available": False, "message": str(exc)}
+            return {"available": True, "message": "Approved privacy notice available."}
+
     def validate_import(
         self,
         host: str,
@@ -318,8 +350,6 @@ class EventOperationsService:
         event_id: UUID,
         import_id: UUID,
         mapping: dict[str, object],
-        notice_version: int,
-        lawful_basis: str,
     ) -> dict[str, object]:
         tenant, _ = self._scope(host, token, "attendee.export", event_id)
         name_col, email_col, phone_col, external_col, custom_cols = self._mapping(mapping)
@@ -331,22 +361,7 @@ class EventOperationsService:
             )
             if batch is None or batch.status in {"queued", "processing", "completed"}:
                 raise OperationDenied("Import is unavailable for validation")
-            notice = db.scalar(
-                select(RegistrationNoticeVersion).where(
-                    RegistrationNoticeVersion.tenant_id == tenant,
-                    RegistrationNoticeVersion.version == notice_version,
-                    RegistrationNoticeVersion.active.is_(True),
-                    RegistrationNoticeVersion.approved_at.is_not(None),
-                )
-            )
-            if (
-                notice is None
-                or notice.lawful_basis.strip() != lawful_basis.strip()
-                or hashlib.sha256(notice.body.encode("utf-8")).digest() != notice.sha256
-            ):
-                raise OperationDenied(
-                    "Select the active approved notice and explicitly attest its lawful basis"
-                )
+            notice = self._active_notice(db, tenant)
             event = db.scalar(select(Event).where(Event.id == event_id))
             if event is None:
                 raise OperationDenied("Event registration form unavailable")
@@ -457,8 +472,8 @@ class EventOperationsService:
                     row.status = "valid"
                     valid += 1
             batch.mapping = mapping
-            batch.notice_version = notice_version
-            batch.lawful_basis = lawful_basis.strip()
+            batch.notice_version = notice.version
+            batch.lawful_basis = notice.lawful_basis
             batch.valid_count, batch.invalid_count, batch.duplicate_count = (
                 valid,
                 invalid,
@@ -482,11 +497,13 @@ class EventOperationsService:
         token: str,
         event_id: UUID,
         import_id: UUID,
-        mapping: dict[str, object],
-        notice_version: int,
-        lawful_basis: str,
+        authorization_confirmed: bool,
     ) -> dict[str, object]:
-        tenant, _ = self._scope(host, token, "attendee.export", event_id)
+        tenant, actor = self._scope(host, token, "attendee.export", event_id)
+        if not authorization_confirmed:
+            raise OperationDenied(
+                "Confirm your authority and lawful basis before importing attendees"
+            )
         with authorized_tenant_session(self.engine, tenant) as db:
             previous = db.scalar(
                 select(ParticipantImport).where(
@@ -497,16 +514,11 @@ class EventOperationsService:
             if previous is None:
                 raise OperationDenied("Import unavailable")
             if previous.status in {"queued", "processing", "completed"}:
-                if (
-                    previous.mapping != mapping
-                    or previous.notice_version != notice_version
-                    or previous.lawful_basis != lawful_basis.strip()
-                ):
-                    raise OperationDenied("Import policy cannot change after commit")
                 return _import_view(previous)
-        validated = self.validate_import(
-            host, token, event_id, import_id, mapping, notice_version, lawful_basis
-        )
+            if previous.status != "validated":
+                raise OperationDenied("Validate rows before importing attendees")
+            mapping = previous.mapping
+        validated = self.validate_import(host, token, event_id, import_id, mapping)
         with authorized_tenant_session(self.engine, tenant) as db:
             batch = db.scalar(
                 select(ParticipantImport).where(ParticipantImport.id == import_id).with_for_update()
@@ -516,8 +528,24 @@ class EventOperationsService:
             event = db.scalar(select(Event).where(Event.id == event_id))
             if event is None or event.status != "published":
                 raise OperationDenied("Publish the event before committing registrations")
-            if batch.status == "completed":
+            if batch.status in {"queued", "processing", "completed"}:
                 return _import_view(batch)
+            if batch.valid_count < 1:
+                raise OperationDenied("No valid registrations are available to import")
+            batch.authorization_confirmed_at = datetime.now(UTC)
+            batch.authorization_confirmed_by = actor
+            db.add(
+                SecurityAuditEvent(
+                    actor_user_id=actor,
+                    tenant_id=tenant,
+                    action="registration.import.authorized",
+                    metadata_json={
+                        "event_id": str(event_id),
+                        "import_id": str(import_id),
+                        "notice_version": batch.notice_version,
+                    },
+                )
+            )
             batch.status = "queued"
             batch.current_job_id = enqueue_job(
                 db,
@@ -788,8 +816,8 @@ class EventOperationsService:
                 text("SELECT set_config('app.tenant_id', :tenant, true)"), {"tenant": str(tenant)}
             )
             assignments = list(
-                identity.scalars(
-                    select(EventAssignment).where(
+                identity.execute(
+                    select(EventAssignment.event_id, EventAssignment.gate_id).where(
                         EventAssignment.tenant_id == tenant,
                         EventAssignment.user_id == user.id,
                         EventAssignment.gate_id.is_not(None),
@@ -799,13 +827,13 @@ class EventOperationsService:
                             EventAssignment.valid_until.is_(None), EventAssignment.valid_until > now
                         ),
                     )
-                )
+                ).all()
             )
         result = []
         with authorized_tenant_session(self.engine, tenant) as db:
-            for assignment in assignments:
-                event = db.scalar(select(Event).where(Event.id == assignment.event_id))
-                gate = db.scalar(select(Gate).where(Gate.id == assignment.gate_id))
+            for event_id, gate_id in assignments:
+                event = db.scalar(select(Event).where(Event.id == event_id))
+                gate = db.scalar(select(Gate).where(Gate.id == gate_id))
                 if event and gate and gate.status == "active":
                     result.append(
                         {
